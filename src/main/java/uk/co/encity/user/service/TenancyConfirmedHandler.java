@@ -62,10 +62,10 @@ public class TenancyConfirmedHandler {
             logger.error("Error de-serialising tenancy confirmed event: " + e.getMessage());
         }
 
-        User theUser = this.userRepo.addUser(evt.getTenancyId(), evt.getAdminUser(), true);
+        // Generate a UserCreatedEvent and publish it
+        User theUser = this.userRepo.addUser(evt.getTenancyId(), evt.getDomain(), evt.getAdminUser(), true);
         UserEvent userEvent = this.userRepo.addUserEvent(UserEventType.USER_CREATED, theUser);
 
-        // Generate a UserCreatedEvent and publish it
         logger.debug("Sending message...");
         module.addSerializer(UserCreatedEvent.class, new UserCreatedEventSerializer());
         mapper.registerModule(module);

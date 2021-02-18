@@ -40,6 +40,8 @@ public class TenancyConfirmedEventDeserializer extends StdDeserializer<TenancyCo
         EmailRecipient userContact = this.deserializeContact(node.get("originalAdminUser"));
         //int tenancyVersionNumber = node.get("tenancyVersionNumber").asInt();
 
+        String domain = node.get("domain").asText();
+
         return
             TenancyConfirmedEvent.builder()
                 .eventId(eventId)
@@ -49,6 +51,7 @@ public class TenancyConfirmedEventDeserializer extends StdDeserializer<TenancyCo
                 .eventDateTime(eventDateTime)
                 //.tenancyVersionNumber(tenancyVersionNumber)
                 .adminUser(userContact)
+                .domain(domain)
             .build();
     }
 

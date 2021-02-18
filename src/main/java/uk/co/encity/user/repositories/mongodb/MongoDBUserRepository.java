@@ -1,11 +1,9 @@
 package uk.co.encity.user.repositories.mongodb;
 
+import com.mongodb.BasicDBObject;
 import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
-import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoClients;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.*;
 import org.bson.UuidRepresentation;
 import org.bson.codecs.UuidCodec;
 import org.bson.codecs.configuration.CodecRegistries;
@@ -25,8 +23,14 @@ import uk.co.encity.user.events.UserEvent;
 import uk.co.encity.user.events.UserEventType;
 import uk.co.encity.user.service.UserRepository;
 
+import java.io.IOException;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 
+import static com.mongodb.client.model.Filters.*;
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
@@ -41,6 +45,9 @@ public class MongoDBUserRepository implements UserRepository {
     private final MongoClient mongoClient;
     private final MongoDatabase db;
     private final CodecRegistry codecRegistry;
+
+    @Value("${user.expiryHours}")
+    int expiryHours;
 
     public MongoDBUserRepository(@Value("${mongodb.uri}") String mongodbURI, @Value("${user.db}") String dbName) {
         ConnectionString connectionString = new ConnectionString(mongodbURI);
@@ -60,25 +67,73 @@ public class MongoDBUserRepository implements UserRepository {
         this.mongoClient = MongoClients.create(clientSettings);
         this.db = this.mongoClient.getDatabase(dbName);
     }
-/*
-    @Override
-    public void captureUserEvent(UserEvent event) {
-        MongoCollection<UserEvent> events = db.getCollection("user_events", UserEvent.class);
-        events.insertOne(event);
 
+    private UserSnapshot getLatestSnapshot(String id) {
+        ObjectId targetId = new ObjectId(id);
+        MongoCollection<UserSnapshot> snapshots = db.getCollection("user_snapshots").withDocumentClass(UserSnapshot.class);
+        UserSnapshot snap = snapshots.find(eq("userId", targetId)).sort(new BasicDBObject("lastUpdate", -1)).first();
+
+        return snap;
+    }
+
+    private UserSnapshot inflate(final UserSnapshot snap) throws IOException {
+
+        UserSnapshot inflated = new UserSnapshot(snap);
+
+        if (inflated != null) {
+
+            // Get all events since for the user, in chronological order
+            List<MongoDBUserEvent> events = getEventRange(inflated.getUserIdentity(), snap.getToVersion());
+            for (MongoDBUserEvent e : events) {
+                inflated = e.updateUserSnapshot(inflated);
+            }
+        }
+
+        return inflated;
+    }
+
+    // TODO: Convert to internal classes (not interfaces)!
+    private List<MongoDBUserEvent> getEventRange(String userId, int fromVersion) {
+        List<MongoDBUserEvent> evtList = new ArrayList<>();
+
+        MongoCollection<MongoDBUserEvent> events = db.getCollection("user_events", MongoDBUserEvent.class);
+
+        // Define a query that finds the right versions and sorts them
+        ObjectId uId = new ObjectId(userId);
+        FindIterable<MongoDBUserEvent> evts = events.find(and(eq("userId", uId), gt("userVersionNumber", fromVersion)));
+
+        for (MongoDBUserEvent e : evts) {
+            evtList.add(e);
+        }
+        return evtList;
+    }
+/*
+    private List<UserEvent> getEventRange(String userId, int fromVersion) {
+        List<UserEvent> evtList = new ArrayList<>();
+
+        MongoCollection<UserEvent> events = db.getCollection("user_events", UserEvent.class);
+
+        // Define a query that finds the right versions and sorts them
+        ObjectId uId = new ObjectId(userId);
+        FindIterable<UserEvent> evts = events.find(and(eq("userId", uId), gt("userVersionNumber", fromVersion)));
+
+        for (UserEvent e : evts) {
+            evtList.add(e);
+        }
+        return evtList;
     }
 */
-    @Override
-    public User getUser(String userId) {
-        User u = null;
-        // Get the latest snapshot, then inflate it with all events since
 
-        return u;
+    @Override
+    public User getUser(String userId) throws IOException {
+        UserSnapshot latestSnap = this.getLatestSnapshot(userId);
+        return this.inflate(latestSnap).asUser();
     }
 
     @Override
-    public User addUser(String tenancyId, EmailRecipient user, boolean isAdmin) {
+    public User addUser(String tenancyId, String domain, EmailRecipient user, boolean isAdmin) {
         // Create a snapshot
+        Instant now = Instant.now();
         UserSnapshot snap = new UserSnapshot();
         snap.setUserId(new ObjectId());
         snap.setTenancyId(new ObjectId(tenancyId));
@@ -90,7 +145,11 @@ public class MongoDBUserRepository implements UserRepository {
         snap.setProviderStatus(UserProviderStatus.ACTIVE);
         snap.setFromVersion(1);
         snap.setToVersion(1);
-        snap.setLastUpdate(Instant.now());
+        snap.setLastUpdate(now);
+        snap.setDomain(domain);
+        snap.setConfirmUUID(UUID.randomUUID());
+        snap.setExpiryTime(now.plus(this.expiryHours, ChronoUnit.HOURS));
+        snap.setUserCreationTime(now);
 
         // Store the snapshot
         MongoCollection<UserSnapshot> userSnapshots = db.getCollection("user_snapshots", UserSnapshot.class);
@@ -98,8 +157,8 @@ public class MongoDBUserRepository implements UserRepository {
 
         // Return the user
         return new User() {
-            public String getUserId() { return snap.getUserId().toHexString(); }
-            public String getTenancyId() { return snap.getTenancyId().toHexString(); }
+            public String getUserIdentity() { return snap.getUserIdentity(); }
+            public String getTenancyIdentity() { return snap.getTenancyIdentity(); }
             public String getFirstName() { return snap.getFirstName(); }
             public String getLastName() { return snap.getLastName(); }
             public String getEmailAddress() { return snap.getEmailAddress(); }
@@ -108,6 +167,10 @@ public class MongoDBUserRepository implements UserRepository {
             public Instant getLastUpdate() { return snap.getLastUpdate(); }
             public UserTenantStatus getTenantStatus() { return snap.getTenantStatus(); }
             public UserProviderStatus getProviderStatus() { return snap.getProviderStatus(); }
+            public String getDomain() { return snap.getDomain(); }
+            public UUID getConfirmUUID() { return snap.getConfirmUUID(); }
+            public Instant getCreationTime() { return now; }
+            public Instant getExpiryTime() { return snap.getExpiryTime(); }
         };
 
     }
@@ -115,13 +178,15 @@ public class MongoDBUserRepository implements UserRepository {
     @Override
     public UserEvent addUserEvent(UserEventType type, User user) {
         final MongoDBUserEvent evt;
+        Instant now = Instant.now();
         switch (type) {
             case USER_CREATED:
                 evt = MongoDBUserCreatedEvent.builder()
-                        .userId(new ObjectId(user.getUserId()))
-                        .eventTime(Instant.now())
+                        .userId(new ObjectId(user.getUserIdentity()))
+                        .eventTime(now)
                         .userVersionNumber(user.getVersion())
-                        .eventType(type)
+                        .userEventType(type)
+                        .expiryTime(user.getExpiryTime())
                         .build();
                 break;
             default:
@@ -132,8 +197,8 @@ public class MongoDBUserRepository implements UserRepository {
         events.insertOne(evt);
 
         return new UserCreatedEvent() {
-            public String getUserId() { return user.getUserId(); }
-            public String getTenancyId() { return user.getTenancyId();}
+            public String getUserIdentity() { return user.getUserIdentity(); }
+            public String getTenancyIdentity() { return user.getTenancyIdentity();}
             public String getFirstName() { return user.getFirstName(); }
             public String getLastName() { return user.getLastName(); }
             public String getEmailAddress() { return user.getEmailAddress(); }
@@ -146,6 +211,10 @@ public class MongoDBUserRepository implements UserRepository {
             public String getEventId() { return evt.getEventId().toHexString(); }
             public UserEventType getUserEventType() { return UserEventType.USER_CREATED; }
             public Instant getEventTime() { return evt.getEventTime(); }
+            public String getDomain() { return user.getDomain(); }
+            public UUID getConfirmUUID() { return user.getConfirmUUID(); };
+            public Instant getCreationTime() { return user.getCreationTime(); }
+            public Instant getExpiryTime() { return user.getExpiryTime(); }
         };
     }
 

@@ -23,4 +23,5 @@ public class TenancyConfirmedEvent {
     private Instant eventDateTime;
     private int tenancyVersionNumber;
     private EmailRecipient adminUser;
+    private final String domain;
 }

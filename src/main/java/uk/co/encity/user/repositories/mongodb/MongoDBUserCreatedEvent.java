@@ -10,9 +10,15 @@ import uk.co.encity.user.events.UserEventType;
 @Getter
 @BsonDiscriminator
 public class MongoDBUserCreatedEvent extends MongoDBUserEvent {
-    private UserEventType eventType;
+    private UserEventType userEventType;
 
     public MongoDBUserCreatedEvent() {
         super();
+    }
+
+    @Override
+    protected UserSnapshot applyToUserSnapshot(UserSnapshot snap) {
+        // Nothing to do - the snap should be up to date
+        return snap;
     }
 }

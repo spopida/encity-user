@@ -22,9 +22,9 @@ public class UserCreatedEventSerializer extends StdSerializer<UserCreatedEvent> 
 
         jGen.writeStartObject();
         jGen.writeFieldName("userId");
-        jGen.writeString(value.getUserId());
+        jGen.writeString(value.getUserIdentity());
         jGen.writeFieldName("tenancyId");
-        jGen.writeString(value.getTenancyId());
+        jGen.writeString(value.getTenancyIdentity());
         jGen.writeFieldName("firstName");
         jGen.writeString(value.getFirstName());
         jGen.writeFieldName("lastName");
@@ -45,6 +45,10 @@ public class UserCreatedEventSerializer extends StdSerializer<UserCreatedEvent> 
         jGen.writeObject(value.getEventTime());
         jGen.writeFieldName("eventType");
         jGen.writeString(value.getUserEventType().toString());
+        jGen.writeFieldName("domain");
+        jGen.writeString(value.getDomain());
+        jGen.writeObjectField("expiryTime", value.getExpiryTime());
+        jGen.writeObjectField("confirmUUID", value.getConfirmUUID());
         jGen.writeEndObject();
     }
 }

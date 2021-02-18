@@ -4,11 +4,12 @@ import uk.co.encity.user.entity.UserProviderStatus;
 import uk.co.encity.user.entity.UserTenantStatus;
 
 import java.time.Instant;
+import java.util.UUID;
 
 public interface HasUser {
-    public String getUserId();
+    public String getUserIdentity();
 
-    public String getTenancyId();
+    public String getTenancyIdentity();
 
     public String getFirstName();
 
@@ -25,5 +26,13 @@ public interface HasUser {
     public UserTenantStatus getTenantStatus();
 
     public UserProviderStatus getProviderStatus();
+
+    public String getDomain();
+
+    public UUID getConfirmUUID();
+
+    public Instant getCreationTime();
+
+    public Instant getExpiryTime();
 
 }
