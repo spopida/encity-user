@@ -98,7 +98,7 @@ public class UserController {
         }
 
         // Does the UUID match for this confirmation attempt?
-        if (! user.getConfirmUUID().equals(confirmUUID)) {
+        if (! user.getConfirmUUID().toString().equals(confirmUUID)) {
             logger.warn(
                     "Attempt to confirm a user with mis-matched UUIDs.  Incoming: " + confirmUUID +
                     ", target=" + user.getConfirmUUID() + ".\n" +
