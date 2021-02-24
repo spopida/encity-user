@@ -1,4 +1,4 @@
-package uk.co.encity.user.events;
+package uk.co.encity.user.events.consumed;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
@@ -30,7 +30,7 @@ public class TenancyConfirmedEventDeserializer extends StdDeserializer<TenancyCo
         String eventId = node.get("eventId").asText();
         TenancyEventType eventType = TenancyEventType.valueOf(node.get("eventType").asText());
         String tenancyId = node.get("tenancyId").asText();
-        //String commandId = node.get("commandId").asText();
+        String commandId = node.get("commandId").asText();
 
         JsonNode edtNode = node.get("eventDateTime");
         long sec = edtNode.get("epochSecond").asLong();
@@ -47,7 +47,7 @@ public class TenancyConfirmedEventDeserializer extends StdDeserializer<TenancyCo
                 .eventId(eventId)
                 .eventType(eventType)
                 .tenancyId(tenancyId)
-                //.commandId(commandId)
+                .commandId(commandId)
                 .eventDateTime(eventDateTime)
                 //.tenancyVersionNumber(tenancyVersionNumber)
                 .adminUser(userContact)

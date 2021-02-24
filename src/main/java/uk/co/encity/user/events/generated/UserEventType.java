@@ -1,4 +1,4 @@
-package uk.co.encity.user.events;
+package uk.co.encity.user.events.generated;
 
 public enum UserEventType {
     USER_CREATED,

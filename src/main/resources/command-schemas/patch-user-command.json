@@ -1,0 +1,18 @@
+{
+  "$schema" : "http://json-schema.org/draft/2019-09/schema#",
+  "$id" : "http://encity.co.uk/dto-schemas/patch-user-command.json",
+  "title" : "Generic schema for requests to update a user",
+  "description" : "Used to validate incoming request types for user updates (transitions)",
+
+  "properties" : {
+    "action" : {
+      "type": "string",
+      "enum": ["confirm", "reject"]
+    },
+    "details" : {
+      "type": "object"
+    }
+  },
+
+  "required" : ["action"]
+}

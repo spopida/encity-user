@@ -1,4 +1,4 @@
-package uk.co.encity.user.events;
+package uk.co.encity.user.events.consumed;
 
 import lombok.Builder;
 import lombok.Getter;

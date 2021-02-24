@@ -1,4 +1,4 @@
-package uk.co.encity.user.events;
+package uk.co.encity.user.events.generated;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 
 import java.io.IOException;
 
+@Deprecated
 public class UserCreatedEventSerializer extends StdSerializer<UserCreatedEvent> {
     public UserCreatedEventSerializer() {
         this(null);
@@ -21,10 +22,11 @@ public class UserCreatedEventSerializer extends StdSerializer<UserCreatedEvent> 
             throws IOException, JsonProcessingException {
 
         jGen.writeStartObject();
+        /*
         jGen.writeFieldName("userId");
-        jGen.writeString(value.getUserIdentity());
+        jGen.writeString(value.getUserId());
         jGen.writeFieldName("tenancyId");
-        jGen.writeString(value.getTenancyIdentity());
+        jGen.writeString(value.getTenancyId());
         jGen.writeFieldName("firstName");
         jGen.writeString(value.getFirstName());
         jGen.writeFieldName("lastName");
@@ -49,6 +51,7 @@ public class UserCreatedEventSerializer extends StdSerializer<UserCreatedEvent> 
         jGen.writeString(value.getDomain());
         jGen.writeObjectField("expiryTime", value.getExpiryTime());
         jGen.writeObjectField("confirmUUID", value.getConfirmUUID());
+         */
         jGen.writeEndObject();
     }
 }

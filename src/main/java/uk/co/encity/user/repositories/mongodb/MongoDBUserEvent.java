@@ -1,28 +1,30 @@
 package uk.co.encity.user.repositories.mongodb;
 
-import lombok.Builder;
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;
 import org.bson.codecs.pojo.annotations.BsonDiscriminator;
 import org.bson.codecs.pojo.annotations.BsonProperty;
 import org.bson.types.ObjectId;
 import uk.co.encity.user.entity.User;
-import uk.co.encity.user.events.UserEvent;
-import uk.co.encity.user.events.UserEventType;
+import uk.co.encity.user.events.generated.UserEvent;
+import uk.co.encity.user.events.generated.UserEventType;
+import uk.co.encity.user.service.UserRepository;
 
 import java.time.Instant;
 
 @SuperBuilder
 @Getter
 @BsonDiscriminator
-// TODO: ??? REVISIT - should it implement UserEvent - it didn't yesterday!
 public abstract class MongoDBUserEvent {
     @BsonProperty("_id")
     private ObjectId eventId;
     private ObjectId userId;
+    private ObjectId commandId;
     private Instant eventTime;
     private int userVersionNumber;
-    private Instant expiryTime;
+    //private Instant expiryTime;
+    private UserEventType userEventType;
+
 
     public MongoDBUserEvent() {
         this.eventId = new ObjectId();
@@ -35,12 +37,13 @@ public abstract class MongoDBUserEvent {
      */
     protected abstract UserSnapshot applyToUserSnapshot(final UserSnapshot snap);
 
-    protected final UserSnapshot updateUserSnapshot(final UserSnapshot snap) {
+    protected final UserSnapshot updateUser(final UserSnapshot userSnap) {
         // Update the core fields
-        UserSnapshot snapCopy = new UserSnapshot(snap);
-        snapCopy.setLastUpdate(this.eventTime);
-        snapCopy.setToVersion(this.userVersionNumber);
-        snapCopy.setExpiryTime(this.expiryTime);
-        return this.applyToUserSnapshot(snapCopy);
+        userSnap.setLastUpdate(this.eventTime);
+        userSnap.setToVersion(this.userVersionNumber);
+
+        return this.applyToUserSnapshot(userSnap);
     }
+
+    protected abstract UserEvent asUserEvent(String commandId, User user, UserRepository repo);
 }

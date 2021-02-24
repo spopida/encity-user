@@ -7,9 +7,9 @@ import java.time.Instant;
 import java.util.UUID;
 
 public interface HasUser {
-    public String getUserIdentity();
+    public String getUserId();
 
-    public String getTenancyIdentity();
+    public String getTenancyId();
 
     public String getFirstName();
 

@@ -1,7 +1,6 @@
 package uk.co.encity.user.repositories.mongodb;
 
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.bson.codecs.pojo.annotations.BsonIgnore;
 import org.bson.codecs.pojo.annotations.BsonProperty;
@@ -22,7 +21,7 @@ import java.util.UUID;
  * up to the desired point in time should be merged with a snapshot.  A snapshot is purely a
  * performance optimisation, and contains database-specific representations
  */
-@Getter @Setter @NoArgsConstructor
+@Getter @Setter
 public class UserSnapshot implements HasUser {
     /**
      * The {@link Logger} for this class
@@ -30,8 +29,8 @@ public class UserSnapshot implements HasUser {
     private static final Logger logger = Loggers.getLogger(UserSnapshot.class);
 
     @BsonProperty("_id") private ObjectId snapshotId;
-    private ObjectId userId;
-    private ObjectId tenancyId;
+    private ObjectId userIdentity;
+    private ObjectId tenancyIdentity;
     private String firstName;
     private String lastName;
     private String emailAddress;
@@ -49,6 +48,10 @@ public class UserSnapshot implements HasUser {
     private Instant expiryTime;
     private Instant userCreationTime;
 
+    public UserSnapshot() {
+        this.snapshotId = new ObjectId();
+    }
+
     /**
      * Copy constructor
      * @param source the {@link UserSnapshot} to copy
@@ -56,8 +59,8 @@ public class UserSnapshot implements HasUser {
      */
     protected UserSnapshot(UserSnapshot source) {
         this.snapshotId = new ObjectId(String.valueOf(source.snapshotId));
-        this.userId = new ObjectId(String.valueOf(source.userId));
-        this.tenancyId = new ObjectId(String.valueOf(source.tenancyId));
+        this.userIdentity = new ObjectId(String.valueOf(source.userIdentity));
+        this.tenancyIdentity = new ObjectId(String.valueOf(source.tenancyIdentity));
         this.firstName = source.firstName;
         this.lastName = source.lastName;
         this.emailAddress = source.emailAddress;
@@ -84,17 +87,15 @@ public class UserSnapshot implements HasUser {
     public Instant getCreationTime() { return this.userCreationTime; }
 
     @BsonIgnore
-    @Override
-    public String getUserIdentity() { return this.userId.toHexString(); }
+    public String getUserId() { return this.userIdentity.toHexString(); }
 
     @BsonIgnore
-    @Override
-    public String getTenancyIdentity() { return this.tenancyId.toHexString(); }
+    public String getTenancyId() { return this.tenancyIdentity.toHexString(); }
 
     public User asUser() {
         return new User() {
-            public String getUserIdentity() { return userId.toHexString() ; }
-            public String getTenancyIdentity() { return tenancyId.toHexString(); }
+            public String getUserId() { return userIdentity.toHexString() ; }
+            public String getTenancyId() { return tenancyIdentity.toHexString(); }
             public String getFirstName() { return firstName; }
             public String getLastName() { return lastName; }
             public String getEmailAddress() { return emailAddress; }

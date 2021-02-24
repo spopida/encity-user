@@ -1,4 +1,4 @@
-package uk.co.encity.user.events;
+package uk.co.encity.user.events.consumed;
 
 /**
  * The set of tenancy-related events of interest to this service

@@ -10,8 +10,14 @@ import org.springframework.stereotype.Component;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 import uk.co.encity.user.entity.User;
-import uk.co.encity.user.events.*;
-import uk.co.encity.user.repositories.mongodb.MongoDBUserRepository;
+import uk.co.encity.user.events.consumed.TenancyConfirmedEvent;
+import uk.co.encity.user.events.consumed.TenancyConfirmedEventDeserializer;
+import uk.co.encity.user.events.generated.UserEvent;
+import uk.co.encity.user.events.generated.UserEventType;
+import uk.co.encity.user.events.published.UserCreatedMessage;
+import uk.co.encity.user.events.published.UserCreatedMessageSerializer;
+import uk.co.encity.user.events.published.UserMessage;
+
 import java.io.IOException;
 
 /**
@@ -64,21 +70,18 @@ public class TenancyConfirmedHandler {
 
         // Generate a UserCreatedEvent and publish it
         User theUser = this.userRepo.addUser(evt.getTenancyId(), evt.getDomain(), evt.getAdminUser(), true);
-        UserEvent userEvent = this.userRepo.addUserEvent(UserEventType.USER_CREATED, theUser);
+        UserEvent userEvent = this.userRepo.addUserEvent(evt.getCommandId(), UserEventType.USER_CREATED, theUser);
 
+        UserMessage outboundMsg = new UserMessage(theUser, userEvent);
         logger.debug("Sending message...");
-        module.addSerializer(UserCreatedEvent.class, new UserCreatedEventSerializer());
+        module.addSerializer(UserCreatedMessage.class, new UserCreatedMessageSerializer());
         mapper.registerModule(module);
         String jsonEvt;
         try {
-            jsonEvt = mapper.writeValueAsString(userEvent);
+            jsonEvt = mapper.writeValueAsString(outboundMsg);
             rabbitTemplate.convertAndSend(topicExchangeName, "encity.user.created", jsonEvt);
         } catch (IOException e) {
-            logger.error("Error publishing user created event: " + e.getMessage());
-            // But carry on attempting to generate a response to the client
+            logger.error("Error publishing user created message: " + e.getMessage());
         }
-
-        // After that create a separate controller to get and receive patch requests...then write a UI to allow the user
-        // to do this...then look into how to use Auth0
     }
 }

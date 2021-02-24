@@ -14,13 +14,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import reactor.util.Logger;
 import reactor.util.Loggers;
+import uk.co.encity.user.commands.PatchUserCommand;
+import uk.co.encity.user.commands.UserCommand;
 import uk.co.encity.user.components.EmailRecipient;
 import uk.co.encity.user.entity.User;
 import uk.co.encity.user.entity.UserProviderStatus;
 import uk.co.encity.user.entity.UserTenantStatus;
-import uk.co.encity.user.events.UserCreatedEvent;
-import uk.co.encity.user.events.UserEvent;
-import uk.co.encity.user.events.UserEventType;
+import uk.co.encity.user.events.generated.UserEvent;
+import uk.co.encity.user.events.generated.UserEventType;
 import uk.co.encity.user.service.UserRepository;
 
 import java.io.IOException;
@@ -46,8 +47,12 @@ public class MongoDBUserRepository implements UserRepository {
     private final MongoDatabase db;
     private final CodecRegistry codecRegistry;
 
+    // TODO: Does this belong in the repo - maybe should move it outside?
     @Value("${user.expiryHours}")
     int expiryHours;
+
+    @Override
+    public String getIdentity() { return new ObjectId().toHexString(); }
 
     public MongoDBUserRepository(@Value("${mongodb.uri}") String mongodbURI, @Value("${user.db}") String dbName) {
         ConnectionString connectionString = new ConnectionString(mongodbURI);
@@ -71,28 +76,27 @@ public class MongoDBUserRepository implements UserRepository {
     private UserSnapshot getLatestSnapshot(String id) {
         ObjectId targetId = new ObjectId(id);
         MongoCollection<UserSnapshot> snapshots = db.getCollection("user_snapshots").withDocumentClass(UserSnapshot.class);
-        UserSnapshot snap = snapshots.find(eq("userId", targetId)).sort(new BasicDBObject("lastUpdate", -1)).first();
+        UserSnapshot snap = snapshots.find(eq("userIdentity", targetId)).sort(new BasicDBObject("lastUpdate", -1)).first();
 
         return snap;
     }
 
-    private UserSnapshot inflate(final UserSnapshot snap) throws IOException {
+    private User inflate(final UserSnapshot snap) throws IOException {
 
-        UserSnapshot inflated = new UserSnapshot(snap);
+        UserSnapshot snapCopy = null;
 
-        if (inflated != null) {
+        if (snap != null) {
+            snapCopy =  new UserSnapshot(snap);
 
             // Get all events since for the user, in chronological order
-            List<MongoDBUserEvent> events = getEventRange(inflated.getUserIdentity(), snap.getToVersion());
+            List<MongoDBUserEvent> events = getEventRange(snap.getUserId(), snap.getToVersion());
             for (MongoDBUserEvent e : events) {
-                inflated = e.updateUserSnapshot(inflated);
+                snapCopy = e.updateUser(snapCopy);
             }
         }
-
-        return inflated;
+        return snapCopy.asUser();
     }
 
-    // TODO: Convert to internal classes (not interfaces)!
     private List<MongoDBUserEvent> getEventRange(String userId, int fromVersion) {
         List<MongoDBUserEvent> evtList = new ArrayList<>();
 
@@ -107,27 +111,11 @@ public class MongoDBUserRepository implements UserRepository {
         }
         return evtList;
     }
-/*
-    private List<UserEvent> getEventRange(String userId, int fromVersion) {
-        List<UserEvent> evtList = new ArrayList<>();
-
-        MongoCollection<UserEvent> events = db.getCollection("user_events", UserEvent.class);
-
-        // Define a query that finds the right versions and sorts them
-        ObjectId uId = new ObjectId(userId);
-        FindIterable<UserEvent> evts = events.find(and(eq("userId", uId), gt("userVersionNumber", fromVersion)));
-
-        for (UserEvent e : evts) {
-            evtList.add(e);
-        }
-        return evtList;
-    }
-*/
 
     @Override
     public User getUser(String userId) throws IOException {
         UserSnapshot latestSnap = this.getLatestSnapshot(userId);
-        return this.inflate(latestSnap).asUser();
+        return this.inflate(latestSnap);
     }
 
     @Override
@@ -135,8 +123,8 @@ public class MongoDBUserRepository implements UserRepository {
         // Create a snapshot
         Instant now = Instant.now();
         UserSnapshot snap = new UserSnapshot();
-        snap.setUserId(new ObjectId());
-        snap.setTenancyId(new ObjectId(tenancyId));
+        snap.setUserIdentity(new ObjectId());
+        snap.setTenancyIdentity(new ObjectId(tenancyId));
         snap.setFirstName(user.getFirstName());
         snap.setLastName(user.getLastName());
         snap.setEmailAddress(user.getEmailAddress());
@@ -157,8 +145,8 @@ public class MongoDBUserRepository implements UserRepository {
 
         // Return the user
         return new User() {
-            public String getUserIdentity() { return snap.getUserIdentity(); }
-            public String getTenancyIdentity() { return snap.getTenancyIdentity(); }
+            public String getUserId() { return snap.getUserId(); }
+            public String getTenancyId() { return snap.getTenancyId(); }
             public String getFirstName() { return snap.getFirstName(); }
             public String getLastName() { return snap.getLastName(); }
             public String getEmailAddress() { return snap.getEmailAddress(); }
@@ -176,17 +164,36 @@ public class MongoDBUserRepository implements UserRepository {
     }
 
     @Override
-    public UserEvent addUserEvent(UserEventType type, User user) {
+    public UserEvent addUserEvent(String commandId, UserEventType type, User user) {
         final MongoDBUserEvent evt;
         Instant now = Instant.now();
         switch (type) {
             case USER_CREATED:
                 evt = MongoDBUserCreatedEvent.builder()
-                        .userId(new ObjectId(user.getUserIdentity()))
+                        .userId(new ObjectId(user.getUserId()))
                         .eventTime(now)
-                        .userVersionNumber(user.getVersion())
+                        .userVersionNumber(1)
                         .userEventType(type)
                         .expiryTime(user.getExpiryTime())
+                        .commandId(new ObjectId(commandId))
+                        .build();
+                break;
+            case USER_CONFIRMED:
+                evt = MongoDBUserConfirmedEvent.builder()
+                        .userId(new ObjectId(user.getUserId()))
+                        .eventTime(now)
+                        .userVersionNumber(user.getVersion() + 1)
+                        .userEventType(type)
+                        .commandId(new ObjectId(commandId))
+                        .build();
+                break;
+            case USER_REJECTED:
+                evt = MongoDBUserRejectedEvent.builder()
+                        .userId(new ObjectId(user.getUserId()))
+                        .eventTime(now)
+                        .userVersionNumber(user.getVersion() + 1)
+                        .userEventType(type)
+                        .commandId(new ObjectId(commandId))
                         .build();
                 break;
             default:
@@ -196,26 +203,16 @@ public class MongoDBUserRepository implements UserRepository {
         MongoCollection<MongoDBUserEvent> events = db.getCollection("user_events", MongoDBUserEvent.class);
         events.insertOne(evt);
 
-        return new UserCreatedEvent() {
-            public String getUserIdentity() { return user.getUserIdentity(); }
-            public String getTenancyIdentity() { return user.getTenancyIdentity();}
-            public String getFirstName() { return user.getFirstName(); }
-            public String getLastName() { return user.getLastName(); }
-            public String getEmailAddress() { return user.getEmailAddress(); }
-            public UserTenantStatus getTenantStatus() { return user.getTenantStatus(); }
-            public UserProviderStatus getProviderStatus() { return user.getProviderStatus(); }
-            public boolean isAdminUser() { return user.isAdminUser(); }
-            public Instant getLastUpdate() { return user.getLastUpdate(); }
-            public int getVersion() { return user.getVersion(); }
-
-            public String getEventId() { return evt.getEventId().toHexString(); }
-            public UserEventType getUserEventType() { return UserEventType.USER_CREATED; }
-            public Instant getEventTime() { return evt.getEventTime(); }
-            public String getDomain() { return user.getDomain(); }
-            public UUID getConfirmUUID() { return user.getConfirmUUID(); };
-            public Instant getCreationTime() { return user.getCreationTime(); }
-            public Instant getExpiryTime() { return user.getExpiryTime(); }
-        };
+        return evt.asUserEvent(commandId, user, this);
     }
 
+    @Override
+    public PatchUserCommand addPatchUserCommand(UserCommand.UserTenantCommandType type, PatchUserCommand cmd) {
+        MongoCollection<MongoDBUserCommand> commands = db.getCollection("user_commands", MongoDBUserCommand.class);
+
+        MongoDBPatchUserCommand dbCmd = MongoDBPatchUserCommand.getMongoDBPatchUserCommand(cmd);
+        commands.insertOne(dbCmd);
+
+        return cmd;
+    }
 }
