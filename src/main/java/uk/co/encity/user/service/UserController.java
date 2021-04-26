@@ -29,8 +29,6 @@ import reactor.core.publisher.Mono;
 import uk.co.encity.user.entity.UserProviderStatus;
 import uk.co.encity.user.entity.UserTenantStatus;
 import uk.co.encity.user.events.generated.UserEvent;
-import uk.co.encity.user.events.published.UserCreatedMessage;
-import uk.co.encity.user.events.published.UserCreatedMessageSerializer;
 import uk.co.encity.user.events.published.UserMessage;
 import uk.co.encity.user.events.published.UserMessageSerializer;
 
@@ -180,7 +178,7 @@ public class UserController {
     }
 
     /**
-     * Attempt to patch a tenancy
+     * Attempt to patch a user
      */
     @PatchMapping(value = "/users/{id}")
     public Mono<ResponseEntity<EntityModel<User>>> patchUser(
@@ -208,6 +206,7 @@ public class UserController {
             logger.debug("Incoming patch request contains valid request type");
 
             // As we add more transitions, additional validation will be needed here
+            // We should create specific schemas per transition and also validate against them
         } catch (ValidationException e) {
             logger.warn("Incoming request body does NOT validate against patch schema; potential API mis-use!");
             response = ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
@@ -230,6 +229,8 @@ public class UserController {
             response = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
             return Mono.just(response);
         }
+
+        // Store the command - even if it doesn't 'execute'
         userRepo.addPatchUserCommand(cmd.getCmdType(), cmd);
 
         // Check pre-conditions

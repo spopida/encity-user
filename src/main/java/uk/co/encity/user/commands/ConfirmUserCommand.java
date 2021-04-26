@@ -17,11 +17,11 @@ public class ConfirmUserCommand extends PatchUserCommand {
     public void checkPreConditions(User u) throws PreConditionException {
         if (u.getTenantStatus() != UserTenantStatus.UNCONFIRMED) {
             throw new PreConditionException(
-                "Cannot confirm user " + u.getUserId() + " due to failed pre-condition");
+                "UserTenantStatus should be UNCONFIRMED");
         }
         if (u.getProviderStatus() != UserProviderStatus.ACTIVE) {
             throw new PreConditionException(
-                "Cannot confirm user " + u.getUserId() + " due to failed pre-condition");
+                "UserProviderStatus should be ACTIVE");
         }
         return;
     }
