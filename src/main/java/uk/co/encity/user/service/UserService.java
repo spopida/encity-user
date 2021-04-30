@@ -13,13 +13,17 @@ import uk.co.encity.user.events.published.UserMessageSerializer;
 
 import java.io.IOException;
 
-public interface UserService {
+public abstract class UserService {
 
-    public UserRepository getRepository();
-    public AmqpTemplate getAmqpTemplate();
-    public String getTopicExchangeName();
-    public Logger getLogger();
-    public ObjectMapper getMapper();
+    public abstract UserRepository getRepository();
+    public abstract AmqpTemplate getAmqpTemplate();
+    public abstract String getTopicExchangeName();
+    public abstract Logger getLogger();
+    public abstract ObjectMapper getMapper();
+
+    public String getM2MToken() {
+        return "";
+    }
 
     /**
      * Attempt to perform a state transition command on a User, applying the necessary
@@ -27,7 +31,7 @@ public interface UserService {
      * @param command the command (transition) to perform
      * @return the affected User
      */
-    default User applyCommand(PatchUserCommand command) throws
+    public User applyCommand(PatchUserCommand command) throws
             UnsupportedOperationException,
             IllegalArgumentException,
             PreConditionException,

@@ -3,13 +3,15 @@ package uk.co.encity.user.service.jackson;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Getter;
 import org.springframework.amqp.core.AmqpTemplate;
+import org.springframework.stereotype.Service;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 import uk.co.encity.user.service.UserRepository;
 import uk.co.encity.user.service.UserService;
 
+@Service
 @Getter
-public class JacksonUserService implements UserService {
+public class JacksonUserService extends UserService {
 
     /**
      * The {@link Logger} for this class

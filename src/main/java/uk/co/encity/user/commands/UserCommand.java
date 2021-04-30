@@ -4,6 +4,7 @@ package uk.co.encity.user.commands;
 //import org.bson.types.ObjectId;
 
 import lombok.Getter;
+import uk.co.encity.user.entity.User;
 import uk.co.encity.user.service.UserRepository;
 
 import java.time.Instant;
@@ -15,12 +16,14 @@ public abstract class UserCommand {
 
     // Defines the commands that a Tenant may perform on a user
     public enum UserTenantCommandType {
-        CREATE_USER,
+        DEMOTE_USER,
+        PROMOTE_USER,
         UPDATE_USER,
-        CLOSE_USER,
+        REVOKE_USER,
+        RESTORE_USER,
         CONFIRM_USER,
         REJECT_USER,
-        CANCEL_USER_CLOSURE,
+        RESET_USER
     }
 
     protected static final Map<String, UserTenantCommandType> ACTION_MAP;
@@ -43,6 +46,7 @@ public abstract class UserCommand {
     private UserCommand.UserTenantCommandType cmdType;
     private UserRepository repo;
 
+    public abstract User perform(User target);
 
     public UserCommand(UserCommand.UserTenantCommandType cmdType, UserRepository repo) {
         this.commandId = repo.getIdentity();

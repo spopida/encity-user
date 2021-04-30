@@ -30,4 +30,11 @@ public class ConfirmUserCommand extends PatchUserCommand {
     public UserEvent createUserEvent(User u) {
         return new UserConfirmedEvent(this.getCommandId(), u, this.getRepo());
     }
+
+    @Override
+    public User perform(User target) {
+        throw new UnsupportedOperationException("Not implemented");
+
+        // Call the Auth0 management API to create the user
+    }
 }

@@ -1,6 +1,5 @@
 package uk.co.encity.user.service;
 
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import org.everit.json.schema.Schema;
@@ -70,12 +69,12 @@ public class UserController {
      *             persistent storage
      */
     public UserController(@Autowired UserRepository repo, @Autowired RabbitTemplate rabbitTmpl) {
-        logger.info("Constructing + this.getClass().getName()");
+        logger.debug(String.format("Constructing %s", this.getClass().getName()));
         this.userRepo = repo;
         this.rabbitTemplate = rabbitTmpl;
         this.rabbitTemplate.setMessageConverter(new Jackson2JsonMessageConverter());
 
-        logger.info("Construction of " + this.getClass().getName() + " is complete");
+        logger.debug("Construction of " + this.getClass().getName() + " is complete");
     }
 
     /**
