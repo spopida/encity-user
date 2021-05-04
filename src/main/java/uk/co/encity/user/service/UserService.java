@@ -57,6 +57,8 @@ public abstract class UserService {
             throw new IllegalArgumentException(String.format("User with id %s does not exist", command.getUserId()), null);
         }
 
+        // Perform the command
+
         // Save an event
         UserEvent evt = command.createUserEvent(theUser);
         userRepo.addUserEvent(command.getCommandId(), evt.getUserEventType(), theUser);

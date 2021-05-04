@@ -79,10 +79,13 @@ public class Auth0IamProvider implements IamProvider {
 
             JsonNode node = jp.getCodec().readTree(jp);
 
+            long expiryInSecs = node.get("expires_in").asLong();
+
             return new Auth0IamProvider.Auth0MgmtApiAccessToken().builder()
                     .accessToken(node.get("access_token").asText())
-                    .expiresIn(node.get("expires_in").asLong())
+                    .expiresIn(expiryInSecs)
                     .tokenType(node.get("token_type").asText())
+                    .nextTokenDue(LocalDateTime.now().plusSeconds(expiryInSecs))
                 .build();
         }
     }
@@ -220,6 +223,7 @@ public class Auth0IamProvider implements IamProvider {
             private String name;
             private boolean verifyEmail = false;
             private String username;
+            private String password;
 
         }
 
@@ -236,6 +240,13 @@ public class Auth0IamProvider implements IamProvider {
                     throws IOException {
                 jsonGenerator.writeStartObject();
                 jsonGenerator.writeStringField("connection", auth0User.getConnection());
+                jsonGenerator.writeStringField("email", auth0User.getEmail());
+                jsonGenerator.writeBooleanField("email_verified", auth0User.isEmailVerified());
+                jsonGenerator.writeStringField("name", auth0User.getName());
+                jsonGenerator.writeBooleanField("verify_email", auth0User.isVerifyEmail());
+                jsonGenerator.writeStringField("user_id", auth0User.getUsername());
+                jsonGenerator.writeStringField("password", auth0User.getPassword());
+                jsonGenerator.writeEndObject();
             }
         }
         // Call the Auth0 Management API to create the user
@@ -254,7 +265,8 @@ public class Auth0IamProvider implements IamProvider {
                 true,
                 String.format("%s %s", user.getFirstName(), user.getLastName()),
                 false,
-                user.getUserId());
+                user.getUserId(),
+                "!HubbleBubble3004!");
 
         ObjectMapper mapper = new ObjectMapper();
         SimpleModule module = new SimpleModule();
@@ -263,7 +275,7 @@ public class Auth0IamProvider implements IamProvider {
         String jsonAuth0User = mapper.writeValueAsString(auth0User);
 
         // 3. POST the Auth0 user (JSON representation) to the Auth0 endpoint
-        HttpResponse<String> response = Unirest.post(this.iamTokenEndpoint + "/users")
+        HttpResponse<String> response = Unirest.post(this.iamAudience + "users")
                 .header("content-type", "application/json")
                 .header("authorization", "Bearer " + this.mgmtAPIAccessToken.getAccessToken())
                 .body(jsonAuth0User)
