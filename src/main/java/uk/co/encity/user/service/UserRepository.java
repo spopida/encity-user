@@ -13,6 +13,7 @@ public interface UserRepository {
 
     public String getIdentity();
     public User getUser(String userId) throws IOException;
+    public User confirmUser(User user) throws IOException;
     public User addUser(String tenancyId, String domain, EmailRecipient user, boolean isAdmin) throws IOException;
     public PatchUserCommand addPatchUserCommand(UserCommand.UserTenantCommandType type, PatchUserCommand cmd);
     public UserEvent addUserEvent(String commandId, UserEventType type, User user);

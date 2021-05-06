@@ -132,6 +132,13 @@ public class MongoDBUserRepository implements UserRepository {
     }
 
     @Override
+    public User confirmUser(User user) throws IOException {
+        // Attempt to create the external representation of the User using the IAMProvider
+        iamProvider.createUser(user);
+        return user;
+    }
+
+    @Override
     public User addUser(String tenancyId, String domain, EmailRecipient user, boolean isAdmin) throws IOException {
         // Create a snapshot
         Instant now = Instant.now();
@@ -169,9 +176,6 @@ public class MongoDBUserRepository implements UserRepository {
             public Instant getCreationTime() { return now; }
             public Instant getExpiryTime() { return snap.getExpiryTime(); }
         };
-
-        // Attempt to create the external representation of the User using the IAMProvider
-        iamProvider.createUser(u);
 
         // Store the snapshot
         MongoCollection<UserSnapshot> userSnapshots = db.getCollection("user_snapshots", UserSnapshot.class);

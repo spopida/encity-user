@@ -63,16 +63,25 @@ public class UserController {
     private final RabbitTemplate rabbitTemplate;
 
     /**
+     * The service - orchestrates actions
+     */
+    private final UserService userService;
+
+    /**
      * Construct an instance with access to a repository of users
      *
      * @param repo the instance of {@link UserRepository} that is used to read and write users to and from
      *             persistent storage
      */
-    public UserController(@Autowired UserRepository repo, @Autowired RabbitTemplate rabbitTmpl) {
+    public UserController(
+            @Autowired UserRepository repo,
+            @Autowired RabbitTemplate rabbitTmpl,
+            @Autowired UserService service) {
         logger.debug(String.format("Constructing %s", this.getClass().getName()));
         this.userRepo = repo;
         this.rabbitTemplate = rabbitTmpl;
         this.rabbitTemplate.setMessageConverter(new Jackson2JsonMessageConverter());
+        this.userService = service;
 
         logger.debug("Construction of " + this.getClass().getName() + " is complete");
     }
@@ -231,7 +240,22 @@ public class UserController {
 
         // Store the command - even if it doesn't 'execute'
         userRepo.addPatchUserCommand(cmd.getCmdType(), cmd);
+        // TODO: should the above line be in the service?
 
+        User u = null;
+        try {
+            u = userService.applyCommand(cmd);
+        } catch (UnsupportedOperationException | IOException e) {
+            logger.error(e.getMessage());
+            response = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return Mono.just(response);
+        } catch (IllegalArgumentException | PreConditionException e) {
+            logger.info(e.getMessage());
+            response = ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            return Mono.just(response);
+        }
+
+        /*
         // Check pre-conditions
         User u = null;
         try {
@@ -274,7 +298,7 @@ public class UserController {
             logger.error("Error publishing patched user message: " + e.getMessage());
             // But carry on attempting to generate a response to the client
         }
-
+*/
         // Build a response
         EntityModel<User> userEntityModel;
         try {

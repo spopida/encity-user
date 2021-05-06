@@ -72,6 +72,7 @@ public class TenancyConfirmedHandler {
             // Generate a UserCreatedEvent and publish it
             User theUser = this.userRepo.addUser(evt.getTenancyId(), evt.getDomain(), evt.getAdminUser(), true);
             UserEvent userEvent = this.userRepo.addUserEvent(evt.getCommandId(), UserEventType.USER_CREATED, theUser);
+            // TODO: delegate the above to the UserService?
 
             UserMessage outboundMsg = new UserMessage(theUser, userEvent);
             logger.debug("Sending message...");

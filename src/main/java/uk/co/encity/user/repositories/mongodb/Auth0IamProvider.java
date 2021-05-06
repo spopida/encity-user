@@ -10,16 +10,12 @@ import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 import kong.unirest.HttpResponse;
 import kong.unirest.Unirest;
 import lombok.*;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.context.annotation.PropertySource;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ConcurrentTaskScheduler;
 import org.springframework.stereotype.Component;
 import reactor.util.Logger;
@@ -32,9 +28,10 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-//import java.net.http.HttpResponse;
 
 @Component
 @EnableScheduling
@@ -42,11 +39,51 @@ import java.util.concurrent.ScheduledExecutorService;
 public class Auth0IamProvider implements IamProvider {
 
     /**
+     * The name of the "connection" that defines the authentication provider
+     */
+    private final String CONNECTION_NAME = "Username-Password-Authentication";
+
+
+    /**
      * The number of seconds to cut off the access token expiry delay before regenerating a new token.
      *
-     * This is done to avoid the risk of expiry if network latency delays the regeneration request.
+     * This is done to avoid the risk of expiry if network latency delays the regeneration request.  Keep this as
+     * a constant for now - it's very unlikely to change, and can be set conservatively to allow for slow
+     * networks.
      */
     private final static long ACCESS_TOKEN_EXPIRY_HAIRCUT_SECS = 60;
+
+    /**
+     * The name and id of the Administrator Role used for RBAC.
+     *
+     * An Administrator can manage users.
+     */
+    private final static String ADMINISTRATOR_ROLE = "Administrator";
+    @Value("${uk.co.encity.user.admin-role-id}")
+    private String ADMINISTRATOR_ROLE_ID;
+
+    /**
+     * The name and id of the Portfolio Role used for RBAC.
+     *
+     * A Portfolio User can do everything except user administration
+     */
+    private final static String PORTFOLIO_USER_ROLE = "Portfolio User";
+    @Value("${uk.co.encity.user.portfolio-role-id}")
+    private String PORTFOLIO_USER_ROLE_ID;
+
+    /**
+     * The prefix to use for user ids of Auth0-hosted users (as opposed to other providers like google, facebook, etc)
+     */
+    private final static String AUTH0_USER_ID_PREFIX = "auth0";
+
+    /**
+     * The pipe symbol - this is used in Auth0 user ids, but if used in a URL path it needs to be encoded,
+     * and if used in a request body it should not be encoded!
+     */
+    private final static String ENCODED_PIPE_SYMBOL = "%7C";
+    private final static String RAW_PIPE_SYMBOL = "|";
+
+    private Map rolesMap;
 
     /**
      * A POJO type for access tokens
@@ -63,7 +100,7 @@ public class Auth0IamProvider implements IamProvider {
         private String accessToken;
         private long expiresIn;
         private String tokenType;
-        // TODO: add scopes here
+        // TODO: add required scopes here??
         private LocalDateTime nextTokenDue;
     }
 
@@ -121,6 +158,10 @@ public class Auth0IamProvider implements IamProvider {
         this.iamClientId = iamClientId;
         this.iamClientSecret = iamClientSecret;
 
+        this.rolesMap = new HashMap();
+        rolesMap.put(ADMINISTRATOR_ROLE_ID, ADMINISTRATOR_ROLE);
+        rolesMap.put(PORTFOLIO_USER_ROLE_ID, PORTFOLIO_USER_ROLE);
+
         // Get a new access token for the management API on start-up
         this.getNewAccessToken();
     }
@@ -135,7 +176,6 @@ public class Auth0IamProvider implements IamProvider {
             Auth0IamProvider.this.getNewAccessToken();
         }
     }
-    // TODO: think about synchronisation of method calls in relation to this thread
 
     /**
      * Get a new access token for use when calling the management API.
@@ -208,9 +248,22 @@ public class Auth0IamProvider implements IamProvider {
 
     @Override
     public void createUser(User user) throws IOException {
-        // TODO: Allow the type of user to determine what scopes get created, and create the scopes
+        // 1. Create the user
+        serializeAndPost(user);
 
-        final String CONNECTION_NAME = "Username-Password-Authentication";
+        // 2. Assign the user to the necessary roles
+        // Auth0 seems to turn logic on it's head a little here - you don't add roles to users...you add users to roles.
+        // It's not 'wrong' ... just a little counter-intuitive in this context.
+
+        this.assignUserToRole(PORTFOLIO_USER_ROLE_ID, user); // All users are portfolio users in Encity
+
+        if (user.isAdminUser())
+            this.assignUserToRole(ADMINISTRATOR_ROLE_ID, user);
+
+        return;
+    }
+
+    private void serializeAndPost(User user) throws IOException {
 
         /**
          * Local POJO for the Auth0 representation of a user
@@ -222,9 +275,8 @@ public class Auth0IamProvider implements IamProvider {
             private boolean emailVerified;
             private String name;
             private boolean verifyEmail = false;
-            private String username;
+            private String userId;
             private String password;
-
         }
 
         /**
@@ -244,17 +296,23 @@ public class Auth0IamProvider implements IamProvider {
                 jsonGenerator.writeBooleanField("email_verified", auth0User.isEmailVerified());
                 jsonGenerator.writeStringField("name", auth0User.getName());
                 jsonGenerator.writeBooleanField("verify_email", auth0User.isVerifyEmail());
-                jsonGenerator.writeStringField("user_id", auth0User.getUsername());
+                jsonGenerator.writeStringField("user_id", auth0User.getUserId());
                 jsonGenerator.writeStringField("password", auth0User.getPassword());
                 jsonGenerator.writeEndObject();
             }
         }
-        // Call the Auth0 Management API to create the user
+
+        logger.debug("Serializing and creating user: " + user.getUserId());
+        //------------------------------------------------------------------
+        // Call the Auth0 Management API to create the user and assign roles
+        //------------------------------------------------------------------
 
         // 1. Check that we seem to have an access token that hasn't expired
         LocalDateTime now = LocalDateTime.now();
         if (Duration.between(now, this.mgmtAPIAccessToken.nextTokenDue).toSeconds() < ACCESS_TOKEN_EXPIRY_HAIRCUT_SECS) {
-            logger.warn("Unexpected imminent expiry of access token - attempting re-generation");
+            // This might just happen if the refresh thread got held up - but it's pretty unlikely
+            logger.warn("Unexpected imminent expiry of access token - attempting forced re-generation");
+            logger.warn("ADVISORY: This is indicative of a possible bug and should be investigated further.");
             this.getNewAccessToken();
         }
 
@@ -266,7 +324,8 @@ public class Auth0IamProvider implements IamProvider {
                 String.format("%s %s", user.getFirstName(), user.getLastName()),
                 false,
                 user.getUserId(),
-                "!HubbleBubble3004!");
+                "!;lkfoierkj;alskdfiojkdk;aooienmmvjn!");  // Forget it - this pw was never used!
+        // TODO: Obviously this ^ needs fixing!
 
         ObjectMapper mapper = new ObjectMapper();
         SimpleModule module = new SimpleModule();
@@ -288,6 +347,41 @@ public class Auth0IamProvider implements IamProvider {
             throw new IOException(msg);
         }
 
+        logger.debug("User created: " + user.getUserId());
+        return;
+    }
+
+    private void assignUserToRole(String roleId, User user) throws IOException {
+
+        logger.debug(String.format("Relating user %s to role %s", user.getUserId(), rolesMap.get(roleId)));
+
+        // 1. Generate a user id of the form "provider|user id" and a valid body and url
+        String userId = String.format("%s%s%s", AUTH0_USER_ID_PREFIX, RAW_PIPE_SYMBOL, user.getUserId());
+        String body = String.format("{ \"users\": [ \"%s\" ] }", userId);
+        String url = this.iamAudience + String.format("roles/%s/users", roleId);
+
+        // 2. POST the request to add the user to the role
+        HttpResponse response = Unirest.post( url)
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer " + this.mgmtAPIAccessToken.getAccessToken())
+                .body(body)
+                .asString();
+
+        // 3. Check whether it worked
+        if (response.getStatus() != HttpStatus.OK.value()) {
+            final String msg =
+                    String.format("Failed to assign role %s for user %s due to: %s",
+                    this.rolesMap.get(roleId),
+                    user.getEmailAddress(),
+                    response.getStatusText());
+
+            logger.error(msg);
+            throw new IOException(msg);
+        } else {
+            logger.debug("Added user %s to role %s", user.getEmailAddress(), this.rolesMap.get(roleId));
+        }
+
+        logger.debug(String.format("Role %s assigned to user %s", rolesMap.get(roleId), user.getUserId()));
         return;
     }
 }

@@ -37,6 +37,7 @@ public abstract class UserService {
             PreConditionException,
             IOException
     {
+        // Check that we have a supported command type
         switch (command.getCmdType()) {
             case CONFIRM_USER:
             case REJECT_USER:
@@ -58,6 +59,15 @@ public abstract class UserService {
         }
 
         // Perform the command
+        switch (command.getCmdType()) {
+            case CONFIRM_USER:
+                userRepo.confirmUser(theUser);
+                break;
+            case REJECT_USER:
+                break;
+            default:
+                break;
+        }
 
         // Save an event
         UserEvent evt = command.createUserEvent(theUser);
