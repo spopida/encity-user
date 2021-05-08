@@ -59,8 +59,6 @@ public class Auth0IamProvider implements IamProvider {
      * An Administrator can manage users.
      */
     private final static String ADMINISTRATOR_ROLE = "Administrator";
-    @Value("${uk.co.encity.user.admin-role-id}")
-    private String ADMINISTRATOR_ROLE_ID;
 
     /**
      * The name and id of the Portfolio Role used for RBAC.
@@ -68,8 +66,8 @@ public class Auth0IamProvider implements IamProvider {
      * A Portfolio User can do everything except user administration
      */
     private final static String PORTFOLIO_USER_ROLE = "Portfolio User";
-    @Value("${uk.co.encity.user.portfolio-role-id}")
-    private String PORTFOLIO_USER_ROLE_ID;
+
+    RepositoryConfig repoConfig;
 
     /**
      * The prefix to use for user ids of Auth0-hosted users (as opposed to other providers like google, facebook, etc)
@@ -139,7 +137,7 @@ public class Auth0IamProvider implements IamProvider {
 
     private Auth0MgmtApiAccessToken mgmtAPIAccessToken;
 
-    /**
+        /**
      * Construct an instance of the Auth0 provider.
      * @param iamTokenEndpoint the endpoint of the management API for getting an access token
      * @param iamAudience the identity of the audience (management API application)
@@ -150,7 +148,8 @@ public class Auth0IamProvider implements IamProvider {
             @Value("${uk.co.encity.user.iamprovider.token-endpoint}") String iamTokenEndpoint,
             @Value("${uk.co.encity.user.iamprovider.audience}") String iamAudience,
             @Value("${uk.co.encity.user.m2m.client-id}") String iamClientId,
-            @Value("${uk.co.encity.user.m2m.client-secret}") String iamClientSecret
+            @Value("${uk.co.encity.user.m2m.client-secret}") String iamClientSecret,
+            RepositoryConfig repoConfig
     )
     {
         this.iamTokenEndpoint = iamTokenEndpoint;
@@ -159,8 +158,10 @@ public class Auth0IamProvider implements IamProvider {
         this.iamClientSecret = iamClientSecret;
 
         this.rolesMap = new HashMap();
-        rolesMap.put(ADMINISTRATOR_ROLE_ID, ADMINISTRATOR_ROLE);
-        rolesMap.put(PORTFOLIO_USER_ROLE_ID, PORTFOLIO_USER_ROLE);
+
+        this.repoConfig = repoConfig;
+        rolesMap.put(repoConfig.getAdminRoleId(), ADMINISTRATOR_ROLE);
+        rolesMap.put(repoConfig.getPortfolioUserRoleId(), PORTFOLIO_USER_ROLE);
 
         // Get a new access token for the management API on start-up
         this.getNewAccessToken();
@@ -247,23 +248,23 @@ public class Auth0IamProvider implements IamProvider {
     }
 
     @Override
-    public void createUser(User user) throws IOException {
+    public void createUser(User user, String initialPassword) throws IOException {
         // 1. Create the user
-        serializeAndPost(user);
+        serializeAndPost(user, initialPassword);
 
         // 2. Assign the user to the necessary roles
         // Auth0 seems to turn logic on it's head a little here - you don't add roles to users...you add users to roles.
         // It's not 'wrong' ... just a little counter-intuitive in this context.
 
-        this.assignUserToRole(PORTFOLIO_USER_ROLE_ID, user); // All users are portfolio users in Encity
+        this.assignUserToRole(this.repoConfig.getPortfolioUserRoleId(), user); // All users are portfolio users in Encity
 
         if (user.isAdminUser())
-            this.assignUserToRole(ADMINISTRATOR_ROLE_ID, user);
+            this.assignUserToRole(this.repoConfig.getAdminRoleId(), user);
 
         return;
     }
 
-    private void serializeAndPost(User user) throws IOException {
+    private void serializeAndPost(User user, String initialPassword) throws IOException {
 
         /**
          * Local POJO for the Auth0 representation of a user
@@ -324,8 +325,7 @@ public class Auth0IamProvider implements IamProvider {
                 String.format("%s %s", user.getFirstName(), user.getLastName()),
                 false,
                 user.getUserId(),
-                "!;lkfoierkj;alskdfiojkdk;aooienmmvjn!");  // Forget it - this pw was never used!
-        // TODO: Obviously this ^ needs fixing!
+                initialPassword);
 
         ObjectMapper mapper = new ObjectMapper();
         SimpleModule module = new SimpleModule();
@@ -353,7 +353,7 @@ public class Auth0IamProvider implements IamProvider {
 
     private void assignUserToRole(String roleId, User user) throws IOException {
 
-        logger.debug(String.format("Relating user %s to role %s", user.getUserId(), rolesMap.get(roleId)));
+        logger.debug(String.format("Relating user %s to role %s", user.getUserId(), rolesMap.get(roleId).toString()));
 
         // 1. Generate a user id of the form "provider|user id" and a valid body and url
         String userId = String.format("%s%s%s", AUTH0_USER_ID_PREFIX, RAW_PIPE_SYMBOL, user.getUserId());
@@ -378,10 +378,10 @@ public class Auth0IamProvider implements IamProvider {
             logger.error(msg);
             throw new IOException(msg);
         } else {
-            logger.debug("Added user %s to role %s", user.getEmailAddress(), this.rolesMap.get(roleId));
+            logger.debug(String.format("Added user %s to role %s", user.getEmailAddress(), this.rolesMap.get(roleId)));
         }
 
-        logger.debug(String.format("Role %s assigned to user %s", rolesMap.get(roleId), user.getUserId()));
+        logger.debug(String.format("Role %s assigned to user %s", rolesMap.get(roleId).toString(), user.getUserId()));
         return;
     }
 }

@@ -193,7 +193,13 @@ public class UserController {
             @PathVariable String id,
             @RequestBody String body,
             UriComponentsBuilder uriBuilder) {
+
         logger.debug("Attempting to patch a user from request body:\n" + body);
+
+        //-------------------------------------------------------
+        // 1. Analyse and validate and store the incoming command
+        //-------------------------------------------------------
+        // TODO: refactor this section into a separate method so that it can be unit tested
         ResponseEntity<EntityModel<User>> response = null;
 
         // Figure out the type of update
@@ -240,8 +246,10 @@ public class UserController {
 
         // Store the command - even if it doesn't 'execute'
         userRepo.addPatchUserCommand(cmd.getCmdType(), cmd);
-        // TODO: should the above line be in the service?
 
+        //-------------------------------------------------------
+        // 2. Execute the command
+        //-------------------------------------------------------
         User u = null;
         try {
             u = userService.applyCommand(cmd);
@@ -255,51 +263,9 @@ public class UserController {
             return Mono.just(response);
         }
 
-        /*
-        // Check pre-conditions
-        User u = null;
-        try {
-            if ((u = this.userRepo.getUser(id)) != null) {
-                try {
-                    cmd.checkPreConditions(u);
-                } catch (PreConditionException e) {
-                    logger.debug(e.getMessage());
-                    response = ResponseEntity.status(HttpStatus.CONFLICT).build();
-                    return Mono.just(response);
-                }
-
-                // OK - it can be actioned
-            } else {
-                logger.debug("Cannot patch user " + id + " as it doesn't exist");
-                response = ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-                return Mono.just(response);
-            }
-        } catch (IOException e) {
-            String msg = "Unexpected failure reading user with id: " + id;
-            logger.error(msg);
-            response = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-            return Mono.just(response);
-        }
-
-        // Save an event
-        UserEvent evt = cmd.createUserEvent(u);
-        userRepo.addUserEvent(cmd.getCommandId(), evt.getUserEventType(), u);
-
-        // Publish the event
-        UserMessage outboundMsg = new UserMessage(u, evt);
-        logger.debug("Sending message...");
-        module.addSerializer(UserMessage.class, new UserMessageSerializer());
-        mapper.registerModule(module);
-        String jsonEvt;
-        try {
-            jsonEvt = mapper.writeValueAsString(outboundMsg);
-            rabbitTemplate.convertAndSend(topicExchangeName, evt.getRoutingKey(), jsonEvt);
-        } catch (IOException e) {
-            logger.error("Error publishing patched user message: " + e.getMessage());
-            // But carry on attempting to generate a response to the client
-        }
-*/
-        // Build a response
+        //-------------------------------------------------------
+        // 3. Build a HATEOAS-style response
+        //-------------------------------------------------------
         EntityModel<User> userEntityModel;
         try {
             userEntityModel = EntityModel.of(u);

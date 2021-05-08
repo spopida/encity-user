@@ -5,5 +5,5 @@ import uk.co.encity.user.entity.User;
 import java.io.IOException;
 
 public interface IamProvider {
-    public void createUser(User user) throws IOException;
+    public void createUser(User user, String initialPassword) throws IOException;
 }

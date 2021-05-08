@@ -24,6 +24,8 @@ import uk.co.encity.user.service.jackson.JacksonUserService;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @ExtendWith(SpringExtension.class)
@@ -31,6 +33,8 @@ import java.util.UUID;
 public class UserServiceTest {
     // Class to be tested
     private UserService userService;
+
+    private Map extras;
 
     // Dependencies
     @Mock
@@ -68,6 +72,10 @@ public class UserServiceTest {
         ObjectMapper mapper = new ObjectMapper();
         mapper.addMixIn(User.class, UserMixin.class);
         this.userService = new JacksonUserService(userRepo, rabbitTemplate, mapper);
+
+        // Create some command-specific data
+        this.extras = new HashMap();
+        this.extras.put(ConfirmUserCommand.Extras.INITIAL_PASSWORD, "BoiledFrogs");
     }
 
     @Nested
@@ -80,7 +88,8 @@ public class UserServiceTest {
             when(aUser.getTenantStatus()).thenReturn(UserTenantStatus.UNCONFIRMED);
             when(aUser.getProviderStatus()).thenReturn(UserProviderStatus.ACTIVE);
             when(userRepo.getUser(anyString())).thenReturn(aUser);
-            userService.applyCommand(new ConfirmUserCommand("1234", userRepo ));
+
+            userService.applyCommand(new ConfirmUserCommand("1234", userRepo, extras ));
         }
 
         @Test
@@ -102,7 +111,7 @@ public class UserServiceTest {
             when(aUser.getProviderStatus()).thenReturn(UserProviderStatus.ACTIVE);
             when(userRepo.getUser(anyString())).thenReturn(aUser);
             assertThrows(PreConditionException.class,() -> {
-                userService.applyCommand(new ConfirmUserCommand("1234", userRepo ));
+                userService.applyCommand(new ConfirmUserCommand("1234", userRepo, extras ));
             });
         }
         @Test

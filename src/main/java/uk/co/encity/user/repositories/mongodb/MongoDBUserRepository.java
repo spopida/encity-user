@@ -31,6 +31,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static com.mongodb.client.model.Filters.*;
@@ -64,7 +65,8 @@ public class MongoDBUserRepository implements UserRepository {
     public MongoDBUserRepository(
             @Value("${mongodb.uri}") String mongodbURI,
             @Value("${user.db}") String dbName,
-            @Autowired IamProvider iamProvider)
+            @Autowired IamProvider iamProvider,
+            @Autowired RepositoryConfig repoConfig)
     {
         this.iamProvider = iamProvider;
 
@@ -132,9 +134,9 @@ public class MongoDBUserRepository implements UserRepository {
     }
 
     @Override
-    public User confirmUser(User user) throws IOException {
+    public User confirmUser(User user, String initialPassword) throws IOException {
         // Attempt to create the external representation of the User using the IAMProvider
-        iamProvider.createUser(user);
+        iamProvider.createUser(user, initialPassword);
         return user;
     }
 

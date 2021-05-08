@@ -31,9 +31,4 @@ public class RejectUserCommand extends PatchUserCommand {
     public UserEvent createUserEvent(User u) {
         return new UserRejectedEvent(this.getCommandId(), u, this.getRepo());
     }
-
-    @Override
-    public User perform(User target) {
-        throw new UnsupportedOperationException("Not implemented");
-    }
 }

@@ -6,6 +6,8 @@ import uk.co.encity.user.entity.User;
 import uk.co.encity.user.events.generated.UserEvent;
 import uk.co.encity.user.service.UserRepository;
 
+import java.util.Map;
+
 @Getter
 public abstract class PatchUserCommand extends UserCommand {
 
@@ -21,15 +23,16 @@ public abstract class PatchUserCommand extends UserCommand {
     public abstract UserEvent createUserEvent(User u);
 
     public static PatchUserCommand getPatchUserCommand(
-        @NonNull UserCommand.UserTenantCommandType cmdtype,
-        String userId,
-        UserRepository repo)
+            @NonNull UserTenantCommandType cmdtype,
+            String userId,
+            UserRepository repo,
+            Map extras)
     {
         PatchUserCommand patchCmd = null;
 
         switch (cmdtype) {
             case CONFIRM_USER:
-                patchCmd = new ConfirmUserCommand(userId, repo);
+                patchCmd = new ConfirmUserCommand(userId, repo, extras);
                 break;
             case REJECT_USER:
                 patchCmd = new RejectUserCommand(userId, repo);

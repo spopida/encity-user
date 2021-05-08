@@ -46,8 +46,6 @@ public abstract class UserCommand {
     private UserCommand.UserTenantCommandType cmdType;
     private UserRepository repo;
 
-    public abstract User perform(User target);
-
     public UserCommand(UserCommand.UserTenantCommandType cmdType, UserRepository repo) {
         this.commandId = repo.getIdentity();
         this.timeStamp = Instant.now();
