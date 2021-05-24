@@ -13,8 +13,6 @@ import uk.co.encity.user.events.published.UserMessage;
 import uk.co.encity.user.events.published.UserMessageSerializer;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 
 public abstract class UserService {
 
