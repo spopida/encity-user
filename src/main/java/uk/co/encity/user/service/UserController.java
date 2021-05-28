@@ -1,6 +1,5 @@
 package uk.co.encity.user.service;
 
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import org.everit.json.schema.Schema;
@@ -11,36 +10,26 @@ import org.json.JSONTokener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.hateoas.EntityModel;
-import org.springframework.hateoas.Link;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
+import reactor.core.publisher.Mono;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 import uk.co.encity.user.commands.PatchUserCommand;
 import uk.co.encity.user.commands.PatchUserCommandDeserializer;
 import uk.co.encity.user.commands.PreConditionException;
 import uk.co.encity.user.entity.User;
-import reactor.core.publisher.Mono;
 import uk.co.encity.user.entity.UserProviderStatus;
 import uk.co.encity.user.entity.UserTenantStatus;
-import uk.co.encity.user.events.generated.UserEvent;
-import uk.co.encity.user.events.published.UserCreatedMessage;
-import uk.co.encity.user.events.published.UserCreatedMessageSerializer;
-import uk.co.encity.user.events.published.UserMessage;
-import uk.co.encity.user.events.published.UserMessageSerializer;
 
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.time.Instant;
 
 import static java.util.Objects.requireNonNull;
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
-
 
 @CrossOrigin
 @RestController
@@ -66,18 +55,27 @@ public class UserController {
     private final RabbitTemplate rabbitTemplate;
 
     /**
+     * The service - orchestrates actions
+     */
+    private final UserService userService;
+
+    /**
      * Construct an instance with access to a repository of users
      *
      * @param repo the instance of {@link UserRepository} that is used to read and write users to and from
      *             persistent storage
      */
-    public UserController(@Autowired UserRepository repo, @Autowired RabbitTemplate rabbitTmpl) {
-        logger.info("Constructing + this.getClass().getName()");
+    public UserController(
+            @Autowired UserRepository repo,
+            @Autowired RabbitTemplate rabbitTmpl,
+            @Autowired UserService service) {
+        logger.debug(String.format("Constructing %s", this.getClass().getName()));
         this.userRepo = repo;
         this.rabbitTemplate = rabbitTmpl;
         this.rabbitTemplate.setMessageConverter(new Jackson2JsonMessageConverter());
+        this.userService = service;
 
-        logger.info("Construction of " + this.getClass().getName() + " is complete");
+        logger.debug("Construction of " + this.getClass().getName() + " is complete");
     }
 
     /**
@@ -87,15 +85,17 @@ public class UserController {
      * @param action      currently ignored - may be used in future, or removed
      * @param confirmUUID the nonce generated when the user was created to ensure that only the recipient of
      *                    the confirmation request can perform an action
-     * @return A {@link uk.co.encity.user.entity.User} represented as a HAL-compliant JSON object
+     * @return A {@link uk.co.encity.user.entity.User} represented as a JSON object
      */
+    @CrossOrigin
     @GetMapping(value = "/users/{userId}", params = {"action", "uuid"})
-    public Mono<ResponseEntity<EntityModel<User>>> getUnconfirmedUser(
+    public Mono<ResponseEntity<User>> getUnconfirmedUser(
             @PathVariable String userId,
             @RequestParam(value = "action") String action,
             @RequestParam(value = "uuid") String confirmUUID) {
+
         logger.debug("Received request to GET user: " + userId + " for confirmation purposes");
-        ResponseEntity<EntityModel<User>> response = null;
+        ResponseEntity<User> response = null;
 
         // Retrieve the (inflated) user entity
         User user = null;
@@ -150,45 +150,26 @@ public class UserController {
             return Mono.just(response);
         }
 
-        // So far, so good - now add the necessary HAL relations
-        EntityModel<User> userEntityModel;
-
-        try {
-            userEntityModel = EntityModel.of(user);
-
-            try {
-                Method m = UserController.class.getMethod("getUnconfirmedUser", String.class, String.class, String.class);
-                Link l = linkTo(m, userId, action, confirmUUID).slash("?action=" + action + "&confirmUUID=" + confirmUUID).withSelfRel();
-
-                userEntityModel.add(l);
-            } catch (NoSuchMethodException e) {
-                logger.error("Failure generating HAL relations - please investigate.  userId: " + userId);
-                response = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-                return Mono.just(response);
-            }
-        } catch (Exception e) {
-            logger.error("Unexpected error returning tenancy - please investigate: " + userId);
-            response = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-            return Mono.just(response);
-        }
-
-
-        // There's some magic going here that merits further understanding.  The line below appears to
-        // convert the object to HAL-compliant JSON (must be functionality in EntityModel class)
-        response = ResponseEntity.status(HttpStatus.OK).body(userEntityModel);
+        response = ResponseEntity.status(HttpStatus.OK).body(user);
         return Mono.just(response);
     }
 
     /**
-     * Attempt to patch a tenancy
+     * Attempt to patch a user
      */
     @PatchMapping(value = "/users/{id}")
-    public Mono<ResponseEntity<EntityModel<User>>> patchUser(
+    public Mono<ResponseEntity<User>> patchUser(
             @PathVariable String id,
             @RequestBody String body,
             UriComponentsBuilder uriBuilder) {
+
         logger.debug("Attempting to patch a user from request body:\n" + body);
-        ResponseEntity<EntityModel<User>> response = null;
+
+        //-------------------------------------------------------
+        // 1. Analyse and validate and store the incoming command
+        //-------------------------------------------------------
+        // TODO: refactor this section into a separate method so that it can be unit tested
+        ResponseEntity<User> response = null;
 
         // Figure out the type of update
         //  - validate against a generic patch schema that checks the command is supported
@@ -208,6 +189,7 @@ public class UserController {
             logger.debug("Incoming patch request contains valid request type");
 
             // As we add more transitions, additional validation will be needed here
+            // We should create specific schemas per transition and also validate against them
         } catch (ValidationException e) {
             logger.warn("Incoming request body does NOT validate against patch schema; potential API mis-use!");
             response = ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
@@ -230,68 +212,23 @@ public class UserController {
             response = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
             return Mono.just(response);
         }
+
+        // Store the command - even if it doesn't 'execute'
         userRepo.addPatchUserCommand(cmd.getCmdType(), cmd);
 
-        // Check pre-conditions
+        //-------------------------------------------------------
+        // 2. Execute the command
+        //-------------------------------------------------------
         User u = null;
         try {
-            if ((u = this.userRepo.getUser(id)) != null) {
-                try {
-                    cmd.checkPreConditions(u);
-                } catch (PreConditionException e) {
-                    logger.debug(e.getMessage());
-                    response = ResponseEntity.status(HttpStatus.CONFLICT).build();
-                    return Mono.just(response);
-                }
-
-                // OK - it can be actioned
-            } else {
-                logger.debug("Cannot patch user " + id + " as it doesn't exist");
-                response = ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-                return Mono.just(response);
-            }
-        } catch (IOException e) {
-            String msg = "Unexpected failure reading user with id: " + id;
-            logger.error(msg);
+            u = userService.applyCommand(cmd);
+        } catch (UnsupportedOperationException | IOException e) {
+            logger.error(e.getMessage());
             response = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
             return Mono.just(response);
-        }
-
-        // Save an event
-        UserEvent evt = cmd.createUserEvent(u);
-        userRepo.addUserEvent(cmd.getCommandId(), evt.getUserEventType(), u);
-
-        // Publish the event
-        UserMessage outboundMsg = new UserMessage(u, evt);
-        logger.debug("Sending message...");
-        module.addSerializer(UserMessage.class, new UserMessageSerializer());
-        mapper.registerModule(module);
-        String jsonEvt;
-        try {
-            jsonEvt = mapper.writeValueAsString(outboundMsg);
-            rabbitTemplate.convertAndSend(topicExchangeName, evt.getRoutingKey(), jsonEvt);
-        } catch (IOException e) {
-            logger.error("Error publishing patched user message: " + e.getMessage());
-            // But carry on attempting to generate a response to the client
-        }
-
-        // Build a response
-        EntityModel<User> userEntityModel;
-        try {
-            userEntityModel = EntityModel.of(u);
-            try {
-                Method m = UserController.class.getMethod("getUser", String.class);
-                Link l = linkTo(m, id).withSelfRel();
-
-                userEntityModel.add(l);
-            } catch (NoSuchMethodException e) {
-                logger.error("Failure generating HAL relations - please investigate.  UserId: " + u.getUserId());
-                response = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-                return Mono.just(response);
-            }
-        } catch (Exception e) {
-            logger.error("Unexpected error generating EntityModel - please investigate: " + u.getUserId());
-            response = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        } catch (IllegalArgumentException | PreConditionException e) {
+            logger.info(e.getMessage());
+            response = ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             return Mono.just(response);
         }
 
@@ -300,21 +237,45 @@ public class UserController {
         HttpHeaders headers =  new HttpHeaders();
         headers.setLocation(uriComponents.toUri());
 
-        response = ResponseEntity.status(HttpStatus.OK).headers(headers).body(userEntityModel);
+        response = ResponseEntity.status(HttpStatus.OK).headers(headers).body(u);
+
         return Mono.just(response);
     }
+
     /**
      * Attempt to get user info.
      * @param id the identity of the user
      * @return  A Mono that wraps a ResponseEntity containing the response.  Possible
      *          response status codes are INTERNAL_SERVER_ERROR, OK, and NOT_FOUND.
      */
+    @CrossOrigin
     @GetMapping(value = "/users/{id}", params = {})
-    public Mono<ResponseEntity<String>> getUser(@PathVariable String id) {
+    public Mono<ResponseEntity<User>> getUser(@PathVariable String id) {
         logger.debug("Attempting to GET user: " + id);
-        ResponseEntity<String> response = null;
-        response = ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body("");
-        return Mono.just(response);
-    }
+        ResponseEntity<User> response = null;
 
+        User theUser = null;
+        try {
+            theUser = userRepo.getUser(id);
+        } catch (IOException e) {
+            logger.debug("Error retrieving user: " + theUser.getUserId());
+            response = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return Mono.just(response);
+        }
+
+        if (theUser == null) {
+            response = ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            return Mono.just(response);
+        }
+
+        try {
+            response = ResponseEntity.status(HttpStatus.OK).body(theUser);
+            //response = ResponseEntity.status(HttpStatus.OK).body(this.getHateoasEntityModel(theUser));
+            return Mono.just(response);
+        } catch (Exception e) {
+            logger.error(String.format("Unexpected error: %s", e.getMessage()));
+            response = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return Mono.just(response);
+        }
+    }
 }

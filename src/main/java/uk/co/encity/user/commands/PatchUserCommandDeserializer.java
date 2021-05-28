@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
 import uk.co.encity.user.service.UserRepository;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 public class PatchUserCommandDeserializer extends StdDeserializer<PatchUserCommand> {
 
@@ -28,10 +30,23 @@ public class PatchUserCommandDeserializer extends StdDeserializer<PatchUserComma
         JsonNode node = jp.getCodec().readTree(jp);
         String transition = node.get("action").asText();
 
+        Map extras = new HashMap();
+        UserCommand.UserTenantCommandType cmdType = UserCommand.ACTION_MAP.get(transition);
+
+        switch (cmdType) {
+            case CONFIRM_USER:
+                String initialPassword = node.get("password").asText();
+                extras.put(ConfirmUserCommand.Extras.INITIAL_PASSWORD, initialPassword);
+                break;
+            default:
+                break;
+        }
+
         return PatchUserCommand.getPatchUserCommand(
             UserCommand.ACTION_MAP.get(transition),
             this.userId,
-            this.repo
+            this.repo,
+            extras
         );
     }
 }

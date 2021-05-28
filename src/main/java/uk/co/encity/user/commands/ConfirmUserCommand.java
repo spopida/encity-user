@@ -7,21 +7,32 @@ import uk.co.encity.user.events.generated.UserConfirmedEvent;
 import uk.co.encity.user.events.generated.UserEvent;
 import uk.co.encity.user.service.UserRepository;
 
+import java.util.Map;
+
 public class ConfirmUserCommand extends PatchUserCommand {
 
-    public ConfirmUserCommand(String userId, UserRepository repo) {
-        super(UserTenantCommandType.CONFIRM_USER, userId, repo);
+    public enum Extras {
+        INITIAL_PASSWORD
     }
+
+    transient private String initialPassword;
+
+    public ConfirmUserCommand(String userId, UserRepository repo, Map extras) {
+        super(UserTenantCommandType.CONFIRM_USER, userId, repo);
+        this.initialPassword = (String)extras.get(Extras.INITIAL_PASSWORD);
+    }
+
+    public String getInitialPassword() { return this.initialPassword; }
 
     @Override
     public void checkPreConditions(User u) throws PreConditionException {
         if (u.getTenantStatus() != UserTenantStatus.UNCONFIRMED) {
             throw new PreConditionException(
-                "Cannot confirm user " + u.getUserId() + " due to failed pre-condition");
+                "UserTenantStatus should be UNCONFIRMED");
         }
         if (u.getProviderStatus() != UserProviderStatus.ACTIVE) {
             throw new PreConditionException(
-                "Cannot confirm user " + u.getUserId() + " due to failed pre-condition");
+                "UserProviderStatus should be ACTIVE");
         }
         return;
     }

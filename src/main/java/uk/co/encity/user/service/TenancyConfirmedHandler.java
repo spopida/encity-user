@@ -65,23 +65,28 @@ public class TenancyConfirmedHandler {
             evt = mapper.readValue(message, TenancyConfirmedEvent.class);
             logger.debug("Tenancy confirmed event de-serialised successfully");
         } catch (IOException e) {
-            logger.error("Error de-serialising tenancy confirmed event: " + e.getMessage());
+            logger.error("Error de-serialising tenancy confirmed event: " + e.getMessage(), e);
         }
 
-        // Generate a UserCreatedEvent and publish it
-        User theUser = this.userRepo.addUser(evt.getTenancyId(), evt.getDomain(), evt.getAdminUser(), true);
-        UserEvent userEvent = this.userRepo.addUserEvent(evt.getCommandId(), UserEventType.USER_CREATED, theUser);
-
-        UserMessage outboundMsg = new UserMessage(theUser, userEvent);
-        logger.debug("Sending message...");
-        module.addSerializer(UserCreatedMessage.class, new UserCreatedMessageSerializer());
-        mapper.registerModule(module);
-        String jsonEvt;
         try {
-            jsonEvt = mapper.writeValueAsString(outboundMsg);
-            rabbitTemplate.convertAndSend(topicExchangeName, "encity.user.created", jsonEvt);
+            // Generate a UserCreatedEvent and publish it
+            User theUser = this.userRepo.addUser(evt.getTenancyId(), evt.getDomain(), evt.getAdminUser(), true);
+            UserEvent userEvent = this.userRepo.addUserEvent(evt.getCommandId(), UserEventType.USER_CREATED, theUser);
+            // TODO: delegate the above to the UserService?
+
+            UserMessage outboundMsg = new UserMessage(theUser, userEvent);
+            logger.debug("Sending message...");
+            module.addSerializer(UserCreatedMessage.class, new UserCreatedMessageSerializer());
+            mapper.registerModule(module);
+            String jsonEvt;
+            try {
+                jsonEvt = mapper.writeValueAsString(outboundMsg);
+                rabbitTemplate.convertAndSend(topicExchangeName, "encity.user.created", jsonEvt);
+            } catch (IOException e) {
+                logger.error("Error publishing user created message: " + e.getMessage(), e);
+            }
         } catch (IOException e) {
-            logger.error("Error publishing user created message: " + e.getMessage());
+            logger.error("Error adding user to repository" + e.getMessage(), e);
         }
     }
 }

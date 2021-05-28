@@ -10,6 +10,7 @@ import org.bson.codecs.configuration.CodecRegistries;
 import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.PojoCodecProvider;
 import org.bson.types.ObjectId;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import reactor.util.Logger;
@@ -22,6 +23,7 @@ import uk.co.encity.user.entity.UserProviderStatus;
 import uk.co.encity.user.entity.UserTenantStatus;
 import uk.co.encity.user.events.generated.UserEvent;
 import uk.co.encity.user.events.generated.UserEventType;
+import uk.co.encity.user.service.IamProvider;
 import uk.co.encity.user.service.UserRepository;
 
 import java.io.IOException;
@@ -29,7 +31,16 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+
+/* MongoDB Reactive - coming soon
+import com.mongodb.reactivestreams.client.MongoClient;
+import com.mongodb.reactivestreams.client.MongoClients;
+import com.mongodb.reactivestreams.client.MongoCollection;
+import com.mongodb.reactivestreams.client.MongoDatabase;
+import com.mongodb.reactivestreams.client.Success;
+*/
 
 import static com.mongodb.client.model.Filters.*;
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
@@ -37,6 +48,11 @@ import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
 @Component
 public class MongoDBUserRepository implements UserRepository {
+
+    /**
+     * The external Identity and Access Management Provider
+     */
+    private final IamProvider iamProvider;
 
     /**
      * The {@link Logger} for this class
@@ -54,7 +70,14 @@ public class MongoDBUserRepository implements UserRepository {
     @Override
     public String getIdentity() { return new ObjectId().toHexString(); }
 
-    public MongoDBUserRepository(@Value("${mongodb.uri}") String mongodbURI, @Value("${user.db}") String dbName) {
+    public MongoDBUserRepository(
+            @Value("${mongodb.uri}") String mongodbURI,
+            @Value("${user.db}") String dbName,
+            @Autowired IamProvider iamProvider,
+            @Autowired RepositoryConfig repoConfig)
+    {
+        this.iamProvider = iamProvider;
+
         ConnectionString connectionString = new ConnectionString(mongodbURI);
 
         CodecRegistry pojoCodecRegistry = fromProviders(PojoCodecProvider.builder().automatic(true).build());
@@ -119,7 +142,14 @@ public class MongoDBUserRepository implements UserRepository {
     }
 
     @Override
-    public User addUser(String tenancyId, String domain, EmailRecipient user, boolean isAdmin) {
+    public User confirmUser(User user, String initialPassword) throws IOException {
+        // Attempt to create the external representation of the User using the IAMProvider
+        iamProvider.createUser(user, initialPassword);
+        return user;
+    }
+
+    @Override
+    public User addUser(String tenancyId, String domain, EmailRecipient user, boolean isAdmin) throws IOException {
         // Create a snapshot
         Instant now = Instant.now();
         UserSnapshot snap = new UserSnapshot();
@@ -139,12 +169,8 @@ public class MongoDBUserRepository implements UserRepository {
         snap.setExpiryTime(now.plus(this.expiryHours, ChronoUnit.HOURS));
         snap.setUserCreationTime(now);
 
-        // Store the snapshot
-        MongoCollection<UserSnapshot> userSnapshots = db.getCollection("user_snapshots", UserSnapshot.class);
-        userSnapshots.insertOne(snap);
-
-        // Return the user
-        return new User() {
+        // Create a User from the snapshot
+        User u = new User() {
             public String getUserId() { return snap.getUserId(); }
             public String getTenancyId() { return snap.getTenancyId(); }
             public String getFirstName() { return snap.getFirstName(); }
@@ -161,6 +187,12 @@ public class MongoDBUserRepository implements UserRepository {
             public Instant getExpiryTime() { return snap.getExpiryTime(); }
         };
 
+        // Store the snapshot
+        MongoCollection<UserSnapshot> userSnapshots = db.getCollection("user_snapshots", UserSnapshot.class);
+        userSnapshots.insertOne(snap);
+
+        // Return the user
+        return u;
     }
 
     @Override
