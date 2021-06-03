@@ -3,12 +3,15 @@ package uk.co.encity.user.service;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoders;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.security.web.server.util.matcher.PathPatternParserServerWebExchangeMatcher;
+import org.springframework.security.web.util.matcher.RegexRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
@@ -52,12 +55,16 @@ public class SecurityConfig {
 
         http
                 .authorizeExchange()
+                .pathMatchers(HttpMethod.PATCH, "/**").permitAll()
                 .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .pathMatchers(HttpMethod.GET, "/users/**").hasAuthority("SCOPE_read:user_profile")
+                .pathMatchers(HttpMethod.GET, "/users/**").permitAll()
+                //.pathMatchers(HttpMethod.GET, "/users/**").hasAuthority("SCOPE_read:user_profile")
                 //.anyExchange().authenticated()
                 .and()
+                .csrf().disable()
                 .oauth2ResourceServer()
                 .jwt();
+
         return http.build();
     }
 
@@ -83,6 +90,7 @@ public class SecurityConfig {
         corsConfig.applyPermitDefaultValues();
         corsConfig.addAllowedMethod(HttpMethod.GET);
         corsConfig.addAllowedMethod(HttpMethod.OPTIONS);
+        corsConfig.addAllowedMethod(HttpMethod.PATCH);
         corsConfig.setAllowedOrigins(Arrays.asList(this.allowedOrigins));
 
         UrlBasedCorsConfigurationSource source =

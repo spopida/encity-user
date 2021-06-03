@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -88,6 +89,7 @@ public class UserController {
      * @return A {@link uk.co.encity.user.entity.User} represented as a JSON object
      */
     @CrossOrigin
+    @PreAuthorize("permitAll()")
     @GetMapping(value = "/users/{userId}", params = {"action", "uuid"})
     public Mono<ResponseEntity<User>> getUnconfirmedUser(
             @PathVariable String userId,
@@ -157,6 +159,8 @@ public class UserController {
     /**
      * Attempt to patch a user
      */
+    @CrossOrigin
+    @PreAuthorize("permitAll()")
     @PatchMapping(value = "/users/{id}")
     public Mono<ResponseEntity<User>> patchUser(
             @PathVariable String id,
@@ -249,6 +253,7 @@ public class UserController {
      *          response status codes are INTERNAL_SERVER_ERROR, OK, and NOT_FOUND.
      */
     @CrossOrigin
+    @PreAuthorize("hasAuthority('SCOPE_read:user_profile')")
     @GetMapping(value = "/users/{id}", params = {})
     public Mono<ResponseEntity<User>> getUser(@PathVariable String id) {
         logger.debug("Attempting to GET user: " + id);
