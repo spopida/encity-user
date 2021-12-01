@@ -1,14 +1,24 @@
 package uk.co.encity.user.repositories.mongodb;
 
+import static com.mongodb.client.model.Accumulators.*;
+import static com.mongodb.client.model.Aggregates.*;
+import static com.mongodb.client.model.Sorts.*;
+
+
 import com.mongodb.BasicDBObject;
 import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.client.*;
+import com.mongodb.client.model.Accumulators;
+import com.mongodb.client.model.Aggregates;
+import com.mongodb.client.model.Filters;
+import org.bson.Document;
 import org.bson.UuidRepresentation;
 import org.bson.codecs.UuidCodec;
 import org.bson.codecs.configuration.CodecRegistries;
 import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.PojoCodecProvider;
+import org.bson.conversions.Bson;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,10 +39,9 @@ import uk.co.encity.user.service.UserRepository;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 /* MongoDB Reactive - coming soon
 import com.mongodb.reactivestreams.client.MongoClient;
@@ -139,6 +148,61 @@ public class MongoDBUserRepository implements UserRepository {
     public User getUser(String userId) throws IOException {
         UserSnapshot latestSnap = this.getLatestSnapshot(userId);
         return this.inflate(latestSnap);
+    }
+
+    /**
+     * Get a list of confirmed, active users associated with a given tenancy.
+     *
+     * @param tenancyId the identity of the tenancy to which the users belong
+     * @return a List of User objects.  Note that if any exceptions are encountered for a given user an error is
+     * logged, and the user is omitted from the result set
+     */
+    @Override
+    public List<User> getUsersForTenancy(String tenancyId) {
+        // There are multiple snapshots per user, and only the latest one is 'current'.  We need
+        // to get the latest snapshot of every user, then inflate it with subsequent events.
+        //
+        // We need to sort users by userId and lastUpdate (descending), and then extract
+        // the first snapshot - this gives us the latest snapshot per user.  Then we iterate
+        // and inflate.  In this method we hard-code to get ACTIVE CONFIRMED users only.
+        //
+        // A more generic method with parametric statuses will be useful in future
+
+        List<User> userList = new ArrayList<User>();
+
+        ObjectId tenancyObjectId = new ObjectId(tenancyId);
+        MongoCollection<UserSnapshot> snapshots = db.getCollection("user_snapshots").withDocumentClass(UserSnapshot.class);
+
+        // Get a list of the *latest* snapshots for users with a matching tenancyId
+        Bson match = Filters.eq("tenancyId", tenancyId);
+        Bson sort = Aggregates.sort(orderBy(ascending("userIdentity"), descending("lastUpdate")));
+        Bson group = Aggregates.group("userIdentity", Accumulators.first("latestSnapshot", "$$ROOT"));
+
+        // Do the aggregation to get a list user snapshots...
+        List<UserSnapshot> userSnapshots = snapshots.aggregate(Arrays.asList(match, sort, group)).into(new ArrayList<UserSnapshot>());
+
+        // inflate them to their latest images and filter out any that are not ACTIVE or CONFIRMED
+
+        userList = userSnapshots.stream().map(snap -> {
+            User u = null;
+            try {
+                u = this.inflate(snap);
+            } catch (IOException e) {
+                String errMsg = String.format(
+                    "Could not inflate user %s (id=%s) up to version %d for tenancy %s - please investigate!",
+                    snap.getFirstName() + " " + snap.getLastName(),
+                    snap.getUserId(),
+                    snap.getToVersion(),
+                    snap.getTenancyId()
+                );
+                logger.error(errMsg);
+            }
+            return u;
+        })
+        .filter(user -> user.getTenantStatus() == UserTenantStatus.CONFIRMED && user.getProviderStatus() == UserProviderStatus.ACTIVE)
+        .collect(Collectors.toList());
+
+        return userList;
     }
 
     @Override
