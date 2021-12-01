@@ -28,9 +28,12 @@ import uk.co.encity.user.entity.UserProviderStatus;
 import uk.co.encity.user.entity.UserTenantStatus;
 
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.time.Instant;
+import java.util.UUID;
 
 import static java.util.Objects.requireNonNull;
+import java.util.ArrayList;
 
 @CrossOrigin
 @RestController
@@ -77,6 +80,44 @@ public class UserController {
         this.userService = service;
 
         logger.debug("Construction of " + this.getClass().getName() + " is complete");
+    }
+
+    @CrossOrigin
+    @PreAuthorize("permitAll()")
+    @GetMapping(value = "/users", params = {"tenancyId"})
+    public Mono<ResponseEntity<ArrayList<User>>> getUsersForTenancy(
+            @RequestParam(value = "tenancyId") String tenancyId) {
+
+        logger.debug("Received request to GET users for tenancy: " + tenancyId);
+        ResponseEntity<ArrayList<User>> response = null;
+
+        ArrayList<User> userArrayList = new ArrayList<User>();
+
+        userArrayList.add(getNewUser(tenancyId, "gmurtagh@ptrconsulting.com", true, "Gerald", "Murtagh"));
+        userArrayList.add(getNewUser(tenancyId, "jbrook@teazel.com", true, "brook", "brook"));
+
+        response = ResponseEntity.status(HttpStatus.OK).body(userArrayList);
+        return Mono.just(response);
+    }
+
+    private User getNewUser( String tenancyId, String emailAddress, Boolean isAdminUser, String firstName, String lastName ) {
+        return new User() {
+            public String getUserId() { return "UserId"; }
+            public String getTenancyId() { return tenancyId; }
+            public String getFirstName() { return firstName; }
+            public String getLastName() { return lastName; }
+            public String getEmailAddress() { return emailAddress; }
+            public boolean isAdminUser() { return isAdminUser; }
+            public int getVersion() { return 1; }
+            public Instant getLastUpdate() { return Instant.now(); }
+            public UserTenantStatus getTenantStatus() { return UserTenantStatus.CONFIRMED; }
+            public UserProviderStatus getProviderStatus() { return UserProviderStatus.ACTIVE; }
+            public String getDomain() { return "domain"; }
+            public UUID getConfirmUUID() { return UUID.randomUUID(); }
+            public Instant getCreationTime() { return Instant.now(); }
+            public Instant getExpiryTime() { return Instant.now(); }
+
+        };
     }
 
     /**
