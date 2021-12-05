@@ -158,7 +158,7 @@ public class MongoDBUserRepository implements UserRepository {
      * logged, and the user is omitted from the result set
      */
     @Override
-    public List<User> getUsersForTenancy(String tenancyId) {
+    public List<User> getTenancyUsers(String tenancyId) {
         // There are multiple snapshots per user, and only the latest one is 'current'.  We need
         // to get the latest snapshot of every user, then inflate it with subsequent events.
         //
@@ -173,13 +173,18 @@ public class MongoDBUserRepository implements UserRepository {
         ObjectId tenancyObjectId = new ObjectId(tenancyId);
         MongoCollection<UserSnapshot> snapshots = db.getCollection("user_snapshots").withDocumentClass(UserSnapshot.class);
 
+        List<UserSnapshot> testList = null;
         // Get a list of the *latest* snapshots for users with a matching tenancyId
-        Bson match = Filters.eq("tenancyId", tenancyId);
+        Bson match = Aggregates.match(Filters.eq("tenancyIdentity", tenancyObjectId));
+
+        testList = snapshots.aggregate(Arrays.asList(match)).into(new ArrayList<UserSnapshot>());
+
         Bson sort = Aggregates.sort(orderBy(ascending("userIdentity"), descending("lastUpdate")));
         Bson group = Aggregates.group("userIdentity", Accumulators.first("latestSnapshot", "$$ROOT"));
 
         // Do the aggregation to get a list user snapshots...
         List<UserSnapshot> userSnapshots = snapshots.aggregate(Arrays.asList(match, sort, group)).into(new ArrayList<UserSnapshot>());
+        //List<QueryResult> queryResults = snapshots.aggregate(Arrays.asList(match, sort, group)).into(new ArrayList<QueryResult>());
 
         // inflate them to their latest images and filter out any that are not ACTIVE or CONFIRMED
 
@@ -203,6 +208,14 @@ public class MongoDBUserRepository implements UserRepository {
         .collect(Collectors.toList());
 
         return userList;
+    }
+
+    static class QueryResult {
+        // UserId
+        // latestSnapshot
+
+        protected String userId;
+        protected UserSnapshot latestSnapshot;
     }
 
     @Override

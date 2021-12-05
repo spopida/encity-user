@@ -21,9 +21,8 @@ public interface UserRepository {
      * Get a list of users associated with a given tenancy
      * @param tenancyId the identity of the tenancy to which the users belong
      * @return a list of associated users
-     * @throws IOException if there is an unexpected issue retrieving the users
      */
-    public List<User> getUsersForTenancy(String tenancyId);
+    public List<User> getTenancyUsers(String tenancyId);
     public User confirmUser(User user, String initialPassword) throws IOException;
     public User addUser(String tenancyId, String domain, EmailRecipient user, boolean isAdmin) throws IOException;
     public PatchUserCommand addPatchUserCommand(UserCommand.UserTenantCommandType type, PatchUserCommand cmd);

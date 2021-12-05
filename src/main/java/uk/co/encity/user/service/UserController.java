@@ -23,6 +23,7 @@ import reactor.util.Loggers;
 import uk.co.encity.user.commands.PatchUserCommand;
 import uk.co.encity.user.commands.PatchUserCommandDeserializer;
 import uk.co.encity.user.commands.PreConditionException;
+import uk.co.encity.user.entity.BasicUser;
 import uk.co.encity.user.entity.User;
 import uk.co.encity.user.entity.UserProviderStatus;
 import uk.co.encity.user.entity.UserTenantStatus;
@@ -30,6 +31,7 @@ import uk.co.encity.user.entity.UserTenantStatus;
 import java.io.IOException;
 import java.lang.reflect.Array;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static java.util.Objects.requireNonNull;
@@ -85,24 +87,27 @@ public class UserController {
     @CrossOrigin
     @PreAuthorize("permitAll()")
     @GetMapping(value = "/users", params = {"tenancyId"})
-    public Mono<ResponseEntity<ArrayList<User>>> getUsersForTenancy(
+    public Mono<ResponseEntity<ArrayList<BasicUser>>> getUsersForTenancy(
             @RequestParam(value = "tenancyId") String tenancyId) {
 
         logger.debug("Received request to GET users for tenancy: " + tenancyId);
-        ResponseEntity<ArrayList<User>> response = null;
+        ResponseEntity<ArrayList<BasicUser>> response = null;
 
-        ArrayList<User> userArrayList = new ArrayList<User>();
+        ArrayList<BasicUser> userArrayList = new ArrayList<BasicUser>();
 
-        userArrayList.add(getNewUser(tenancyId, "gmurtagh@ptrconsulting.com", true, "Gerald", "Murtagh"));
-        userArrayList.add(getNewUser(tenancyId, "jbrook@teazel.com", true, "brook", "brook"));
+        //List<User> users = userRepo.getTenancyUsers(tenancyId);
+
+
+        userArrayList.add(new BasicUser(getNewUser("3F4EJ", tenancyId, "gmurtagh@ptrconsulting.com", true, "Gerald", "Murtagh")));
+        userArrayList.add(new BasicUser(getNewUser("7D39E", tenancyId, "jbrook@teazel.com", true, "brook", "brook")));
 
         response = ResponseEntity.status(HttpStatus.OK).body(userArrayList);
         return Mono.just(response);
     }
 
-    private User getNewUser( String tenancyId, String emailAddress, Boolean isAdminUser, String firstName, String lastName ) {
+    private User getNewUser( String id, String tenancyId, String emailAddress, Boolean isAdminUser, String firstName, String lastName ) {
         return new User() {
-            public String getUserId() { return "UserId"; }
+            public String getUserId() { return id; }
             public String getTenancyId() { return tenancyId; }
             public String getFirstName() { return firstName; }
             public String getLastName() { return lastName; }
