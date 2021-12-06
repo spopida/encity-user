@@ -36,6 +36,7 @@ import java.util.UUID;
 
 import static java.util.Objects.requireNonNull;
 import java.util.ArrayList;
+import java.util.stream.Collectors;
 
 @CrossOrigin
 @RestController
@@ -84,24 +85,38 @@ public class UserController {
         logger.debug("Construction of " + this.getClass().getName() + " is complete");
     }
 
+    /**
+     * Get a list of users that belong to a given tenancy
+     *
+     * This endpoint implicitly only returns users that are CONFIRMED and ACTIVE.
+     * @param tenancyId the identity of the tenancy of interest
+     * @return a list of users where each entry contains basic user details rather than an exhaustive set of attributes
+     */
     @CrossOrigin
     @PreAuthorize("permitAll()")
     @GetMapping(value = "/users", params = {"tenancyId"})
-    public Mono<ResponseEntity<ArrayList<BasicUser>>> getUsersForTenancy(
+    public Mono<ResponseEntity<List<BasicUser>>> getUsersForTenancy(
             @RequestParam(value = "tenancyId") String tenancyId) {
 
         logger.debug("Received request to GET users for tenancy: " + tenancyId);
-        ResponseEntity<ArrayList<BasicUser>> response = null;
+        ResponseEntity<List<BasicUser>> response = null;
 
-        ArrayList<BasicUser> userArrayList = new ArrayList<BasicUser>();
+        List<User> users = userRepo.getTenancyUsers(tenancyId);
 
-        //List<User> users = userRepo.getTenancyUsers(tenancyId);
+        List<BasicUser> userList = users.stream().map(u -> {
+                return new BasicUser(
+                    getNewUser(
+                        u.getUserId(),
+                        u.getTenancyId(),
+                        u.getEmailAddress(),
+                        u.isAdminUser(),
+                        u.getFirstName(),
+                        u.getLastName()
+                    ));
+            })
+            .collect(Collectors.toList());
 
-
-        userArrayList.add(new BasicUser(getNewUser("3F4EJ", tenancyId, "gmurtagh@ptrconsulting.com", true, "Gerald", "Murtagh")));
-        userArrayList.add(new BasicUser(getNewUser("7D39E", tenancyId, "jbrook@teazel.com", true, "brook", "brook")));
-
-        response = ResponseEntity.status(HttpStatus.OK).body(userArrayList);
+        response = ResponseEntity.status(HttpStatus.OK).body(userList);
         return Mono.just(response);
     }
 

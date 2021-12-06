@@ -160,35 +160,33 @@ public class MongoDBUserRepository implements UserRepository {
     @Override
     public List<User> getTenancyUsers(String tenancyId) {
         // There are multiple snapshots per user, and only the latest one is 'current'.  We need
-        // to get the latest snapshot of every user, then inflate it with subsequent events.
-        //
-        // We need to sort users by userId and lastUpdate (descending), and then extract
-        // the first snapshot - this gives us the latest snapshot per user.  Then we iterate
-        // and inflate.  In this method we hard-code to get ACTIVE CONFIRMED users only.
+        // to get the latest snapshot of every user, then inflate it with subsequent events. Then
+        // we can filter out those that are not eligible for inclusion (e.g. UNCONFIRMED)
         //
         // A more generic method with parametric statuses will be useful in future
 
-        List<User> userList = new ArrayList<User>();
+        //List<User> userList = new ArrayList<User>();
 
-        ObjectId tenancyObjectId = new ObjectId(tenancyId);
         MongoCollection<UserSnapshot> snapshots = db.getCollection("user_snapshots").withDocumentClass(UserSnapshot.class);
 
-        List<UserSnapshot> testList = null;
-        // Get a list of the *latest* snapshots for users with a matching tenancyId
+        // Define a match spec for users with the required tenancyId
+        ObjectId tenancyObjectId = new ObjectId(tenancyId);
         Bson match = Aggregates.match(Filters.eq("tenancyIdentity", tenancyObjectId));
 
-        testList = snapshots.aggregate(Arrays.asList(match)).into(new ArrayList<UserSnapshot>());
-
+        // Make sure the stream is ordered by most recent lastUpdate, per userIdentity
         Bson sort = Aggregates.sort(orderBy(ascending("userIdentity"), descending("lastUpdate")));
+
+        // Grouping is necessary so that the stream can identify the first (i.e. most recent) entry in each 'group'
         Bson group = Aggregates.group("userIdentity", Accumulators.first("latestSnapshot", "$$ROOT"));
 
-        // Do the aggregation to get a list user snapshots...
-        List<UserSnapshot> userSnapshots = snapshots.aggregate(Arrays.asList(match, sort, group)).into(new ArrayList<UserSnapshot>());
-        //List<QueryResult> queryResults = snapshots.aggregate(Arrays.asList(match, sort, group)).into(new ArrayList<QueryResult>());
+        // But we just want the whole record at the start of each group - we're not deriving any group-level data
+        Bson replaceRoot = Aggregates.replaceRoot("$latestSnapshot");
 
-        // inflate them to their latest images and filter out any that are not ACTIVE or CONFIRMED
+        // OK - let's do it...
+        List<UserSnapshot> userSnapshots = snapshots.aggregate(Arrays.asList(match, sort, group, replaceRoot)).into(new ArrayList<UserSnapshot>());
 
-        userList = userSnapshots.stream().map(snap -> {
+        // Now inflate each snapshot so that we have a User, and use a filter to keep ACTIVE and CONFIRMED
+        List<User> userList = userSnapshots.stream().map(snap -> {
             User u = null;
             try {
                 u = this.inflate(snap);
@@ -210,7 +208,7 @@ public class MongoDBUserRepository implements UserRepository {
         return userList;
     }
 
-    static class QueryResult {
+    static class QueryResult extends UserSnapshot {
         // UserId
         // latestSnapshot
 
