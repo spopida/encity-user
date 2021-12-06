@@ -120,6 +120,17 @@ public class UserController {
         return Mono.just(response);
     }
 
+    @CrossOrigin
+    @PreAuthorize("permitAll()")
+    @PatchMapping(value = "/users/{userId}", params = {"multi"})
+    public Mono<ResponseEntity<String>> multiPatch(
+            @PathVariable String userId) {
+        ResponseEntity<String> response = ResponseEntity.status(HttpStatus.OK).build();
+        logger.debug("Attempting to PATCH user: " + userId);
+
+        return Mono.just(response);
+    }
+
     private User getNewUser( String id, String tenancyId, String emailAddress, Boolean isAdminUser, String firstName, String lastName ) {
         return new User() {
             public String getUserId() { return id; }
