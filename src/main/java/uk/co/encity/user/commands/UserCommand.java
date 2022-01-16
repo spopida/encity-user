@@ -5,6 +5,7 @@ package uk.co.encity.user.commands;
 
 import lombok.Getter;
 import uk.co.encity.user.entity.User;
+import uk.co.encity.user.events.generated.UserEvent;
 import uk.co.encity.user.service.UserRepository;
 
 import java.time.Instant;
@@ -23,7 +24,8 @@ public abstract class UserCommand {
         RESTORE_USER,
         CONFIRM_USER,
         REJECT_USER,
-        RESET_USER
+        RESET_USER,
+        DELETE_USER
     }
 
     protected static final Map<String, UserTenantCommandType> ACTION_MAP;
@@ -41,15 +43,20 @@ public abstract class UserCommand {
         STOP_USER
     }
 
+    private String userId;
     private String commandId;
     private Instant timeStamp;
     private UserCommand.UserTenantCommandType cmdType;
     private UserRepository repo;
 
-    public UserCommand(UserCommand.UserTenantCommandType cmdType, UserRepository repo) {
+    public UserCommand(String userId, UserCommand.UserTenantCommandType cmdType, UserRepository repo) {
         this.commandId = repo.getIdentity();
         this.timeStamp = Instant.now();
         this.cmdType = cmdType;
         this.repo = repo;
+        this.userId = userId;
     }
+
+    public abstract void checkPreConditions(User u) throws PreConditionException;
+    public abstract UserEvent createUserEvent(User u);
 }

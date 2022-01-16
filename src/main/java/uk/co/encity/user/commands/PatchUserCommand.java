@@ -11,16 +11,9 @@ import java.util.Map;
 @Getter
 public abstract class PatchUserCommand extends UserCommand {
 
-    String userId;
-
     public PatchUserCommand(UserCommand.UserTenantCommandType cmdType, String userId, UserRepository repo) {
-        super(cmdType, repo);
-        this.userId = userId;
-
+        super(userId, cmdType, repo);
     }
-
-    public abstract void checkPreConditions(User u) throws PreConditionException;
-    public abstract UserEvent createUserEvent(User u);
 
     public static PatchUserCommand getPatchUserCommand(
             @NonNull UserTenantCommandType cmdtype,

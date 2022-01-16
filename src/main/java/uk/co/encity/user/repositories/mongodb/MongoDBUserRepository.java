@@ -25,6 +25,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import reactor.util.Logger;
 import reactor.util.Loggers;
+import uk.co.encity.user.commands.DeleteUserCommand;
 import uk.co.encity.user.commands.PatchUserCommand;
 import uk.co.encity.user.commands.UserCommand;
 import uk.co.encity.user.components.EmailRecipient;
@@ -303,6 +304,15 @@ public class MongoDBUserRepository implements UserRepository {
                         .commandId(new ObjectId(commandId))
                         .build();
                 break;
+            case USER_DELETED:
+                evt = MongoDBUserDeletedEvent.builder()
+                        .userId(new ObjectId(user.getUserId()))
+                        .eventTime(now)
+                        .userVersionNumber(user.getVersion() + 1)
+                        .userEventType(type)
+                        .commandId(new ObjectId(commandId))
+                        .build();
+                break;
             default:
                 throw new IllegalStateException("Unexpected value: " + type);
         }
@@ -318,6 +328,16 @@ public class MongoDBUserRepository implements UserRepository {
         MongoCollection<MongoDBUserCommand> commands = db.getCollection("user_commands", MongoDBUserCommand.class);
 
         MongoDBPatchUserCommand dbCmd = MongoDBPatchUserCommand.getMongoDBPatchUserCommand(cmd);
+        commands.insertOne(dbCmd);
+
+        return cmd;
+    }
+
+    @Override
+    public DeleteUserCommand addDeleteUserCommand(DeleteUserCommand cmd) {
+        MongoCollection<MongoDBUserCommand> commands = db.getCollection("user_commands", MongoDBUserCommand.class);
+
+        MongoDBDeleteUserCommand dbCmd = new MongoDBDeleteUserCommand(cmd);
         commands.insertOne(dbCmd);
 
         return cmd;

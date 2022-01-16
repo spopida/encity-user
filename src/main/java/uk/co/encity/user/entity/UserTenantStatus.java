@@ -4,5 +4,6 @@ public enum UserTenantStatus {
     UNCONFIRMED,
     CONFIRMED,
     REJECTED,
-    CLOSED
+    CLOSED,
+    DELETED
 }

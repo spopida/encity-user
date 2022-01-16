@@ -1,5 +1,6 @@
 package uk.co.encity.user.service;
 
+import uk.co.encity.user.commands.DeleteUserCommand;
 import uk.co.encity.user.commands.PatchUserCommand;
 import uk.co.encity.user.commands.UserCommand;
 import uk.co.encity.user.components.EmailRecipient;
@@ -27,4 +28,5 @@ public interface UserRepository {
     public User addUser(String tenancyId, String domain, EmailRecipient user, boolean isAdmin) throws IOException;
     public PatchUserCommand addPatchUserCommand(UserCommand.UserTenantCommandType type, PatchUserCommand cmd);
     public UserEvent addUserEvent(String commandId, UserEventType type, User user);
+    public DeleteUserCommand addDeleteUserCommand(DeleteUserCommand cmd);
 }
