@@ -131,6 +131,17 @@ public class UserController {
         return Mono.just(response);
     }
 
+    @CrossOrigin
+    @PreAuthorize("permitAll()")
+    @DeleteMapping(value = "/users", params = {"userId"})
+    public Mono<ResponseEntity<String>> deleteUser(
+            @RequestParam(value = "userId") String userId) {
+        ResponseEntity<String> response = ResponseEntity.status(HttpStatus.OK).build();
+        logger.debug("Attempting to DELETE user: " + userId);
+
+        return Mono.just(response);
+    }
+
     private User getNewUser( String id, String tenancyId, String emailAddress, Boolean isAdminUser, String firstName, String lastName ) {
         return new User() {
             public String getUserId() { return id; }
