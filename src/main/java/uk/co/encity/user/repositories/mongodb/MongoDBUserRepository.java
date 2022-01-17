@@ -42,6 +42,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /* MongoDB Reactive - coming soon
@@ -151,6 +152,11 @@ public class MongoDBUserRepository implements UserRepository {
         return this.inflate(latestSnap);
     }
 
+    @Override
+    public List<User> getTenancyUsers(String tenancyId) {
+        return this.getTenancyUsers(tenancyId, (u -> true));
+    }
+
     /**
      * Get a list of confirmed, active users associated with a given tenancy.
      *
@@ -159,7 +165,7 @@ public class MongoDBUserRepository implements UserRepository {
      * logged, and the user is omitted from the result set
      */
     @Override
-    public List<User> getTenancyUsers(String tenancyId) {
+    public List<User> getTenancyUsers(String tenancyId, Predicate<? super User> userFilter) {
         // There are multiple snapshots per user, and only the latest one is 'current'.  We need
         // to get the latest snapshot of every user, then inflate it with subsequent events. Then
         // we can filter out those that are not eligible for inclusion (e.g. UNCONFIRMED)
@@ -204,6 +210,7 @@ public class MongoDBUserRepository implements UserRepository {
             return u;
         })
         .filter(user -> user.getTenantStatus() == UserTenantStatus.CONFIRMED && user.getProviderStatus() == UserProviderStatus.ACTIVE)
+        .filter(userFilter)
         .collect(Collectors.toList());
 
         return userList;
@@ -341,5 +348,14 @@ public class MongoDBUserRepository implements UserRepository {
         commands.insertOne(dbCmd);
 
         return cmd;
+    }
+
+    @Override
+    public int getAdminUserCount(String tenancyId) {
+        long count = 0;
+        Predicate<? super User> p = (u -> u.isAdminUser());
+        List<User> userList = this.getTenancyUsers(tenancyId, p);
+
+        return userList.size();
     }
 }

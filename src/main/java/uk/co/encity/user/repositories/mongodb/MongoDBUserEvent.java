@@ -1,6 +1,7 @@
 package uk.co.encity.user.repositories.mongodb;
 
 import lombok.Getter;
+import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 import org.bson.codecs.pojo.annotations.BsonDiscriminator;
 import org.bson.codecs.pojo.annotations.BsonProperty;
@@ -14,6 +15,7 @@ import java.time.Instant;
 
 @SuperBuilder
 @Getter
+@Setter
 @BsonDiscriminator
 public abstract class MongoDBUserEvent {
     @BsonProperty("_id")
@@ -22,13 +24,12 @@ public abstract class MongoDBUserEvent {
     private ObjectId commandId;
     private Instant eventTime;
     private int userVersionNumber;
-    //private Instant expiryTime;
     private UserEventType userEventType;
 
-
-    public MongoDBUserEvent() {
-        this.eventId = new ObjectId();
-    }
+    /**
+     * Default constructor for creation of an existing event prior to calling setters
+     */
+    public MongoDBUserEvent() {}
 
     /**
      * Apply this event to a given snapshot, producing a new snapshot

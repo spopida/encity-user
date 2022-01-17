@@ -7,13 +7,17 @@ import uk.co.encity.user.entity.User;
 import uk.co.encity.user.entity.UserTenantStatus;
 import uk.co.encity.user.events.generated.UserDeletedEvent;
 import uk.co.encity.user.events.generated.UserEvent;
-import uk.co.encity.user.events.generated.UserRejectedEvent;
 import uk.co.encity.user.service.UserRepository;
 
 @SuperBuilder
 @Getter
 @BsonDiscriminator
 public class MongoDBUserDeletedEvent extends MongoDBUserEvent{
+
+    public MongoDBUserDeletedEvent() {
+        super();
+    }
+
     @Override
     protected UserSnapshot applyToUserSnapshot(UserSnapshot snap) {
         snap.setTenantStatus(UserTenantStatus.DELETED);
