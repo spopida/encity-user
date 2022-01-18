@@ -56,6 +56,7 @@ public class SecurityConfig {
         http
                 .authorizeExchange()
                 .pathMatchers(HttpMethod.PATCH, "/**").permitAll()
+                .pathMatchers(HttpMethod.DELETE, "/**").permitAll()
                 .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .pathMatchers(HttpMethod.GET, "/users/**").permitAll()
                 //.pathMatchers(HttpMethod.GET, "/users/**").hasAuthority("SCOPE_read:user_profile")
@@ -91,6 +92,7 @@ public class SecurityConfig {
         corsConfig.addAllowedMethod(HttpMethod.GET);
         corsConfig.addAllowedMethod(HttpMethod.OPTIONS);
         corsConfig.addAllowedMethod(HttpMethod.PATCH);
+        corsConfig.addAllowedMethod(HttpMethod.DELETE);
         corsConfig.setAllowedOrigins(Arrays.asList(this.allowedOrigins));
 
         UrlBasedCorsConfigurationSource source =

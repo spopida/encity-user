@@ -20,6 +20,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 import reactor.util.Logger;
 import reactor.util.Loggers;
+import uk.co.encity.user.commands.DeleteUserCommand;
 import uk.co.encity.user.commands.PatchUserCommand;
 import uk.co.encity.user.commands.PatchUserCommandDeserializer;
 import uk.co.encity.user.commands.PreConditionException;
@@ -127,6 +128,46 @@ public class UserController {
             @PathVariable String userId) {
         ResponseEntity<String> response = ResponseEntity.status(HttpStatus.OK).build();
         logger.debug("Attempting to PATCH user: " + userId);
+
+        return Mono.just(response);
+    }
+
+    @CrossOrigin
+    @PreAuthorize("permitAll()")
+    @DeleteMapping(value = "/users", params = {"userId"})
+    public Mono<ResponseEntity<User>> deleteUser(
+            @RequestParam(value = "userId") String userId,
+            UriComponentsBuilder uriBuilder) {
+        ResponseEntity<User> response = ResponseEntity.status(HttpStatus.OK).build();
+        logger.debug("Attempting to DELETE user: " + userId);
+
+        DeleteUserCommand cmd = new DeleteUserCommand(userId, this.userRepo);
+
+        // Store the command - even if it doesn't 'execute'
+        userRepo.addDeleteUserCommand(cmd);
+
+        //-------------------------------------------------------
+        // 2. Execute the command
+        //-------------------------------------------------------
+        User u = null;
+        try {
+            u = userService.applyCommand(cmd);
+        } catch (UnsupportedOperationException | IOException e) {
+            logger.error(e.getMessage());
+            response = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return Mono.just(response);
+        } catch (IllegalArgumentException | PreConditionException e) {
+            logger.info(e.getMessage());
+            response = ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            return Mono.just(response);
+        }
+
+        // Build a response (include the correct location)
+        UriComponents uriComponents = uriBuilder.path("/users/" + u.getUserId()).build();
+        HttpHeaders headers =  new HttpHeaders();
+        headers.setLocation(uriComponents.toUri());
+
+        response = ResponseEntity.status(HttpStatus.OK).headers(headers).body(u);
 
         return Mono.just(response);
     }

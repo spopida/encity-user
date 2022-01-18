@@ -7,6 +7,7 @@ import reactor.util.Logger;
 import uk.co.encity.user.commands.ConfirmUserCommand;
 import uk.co.encity.user.commands.PatchUserCommand;
 import uk.co.encity.user.commands.PreConditionException;
+import uk.co.encity.user.commands.UserCommand;
 import uk.co.encity.user.entity.User;
 import uk.co.encity.user.events.generated.UserEvent;
 import uk.co.encity.user.events.published.UserMessage;
@@ -28,7 +29,7 @@ public abstract class UserService {
      * @param command the command (transition) to perform
      * @return the affected User
      */
-    public User applyCommand(PatchUserCommand command) throws
+    public User applyCommand(UserCommand command) throws
             UnsupportedOperationException,
             IllegalArgumentException,
             PreConditionException,
@@ -52,7 +53,8 @@ public abstract class UserService {
                 userRepo.confirmUser(theUser, ((ConfirmUserCommand)command).getInitialPassword());
                 break;
             case REJECT_USER:
-                // No special action is needed to reject a user - the event will be saved (below)
+            case DELETE_USER:
+                // No special action is needed - the event will be saved (below)
                 break;
             default:
                 throw new UnsupportedOperationException("Command not Supported: " + command.getCmdType().toString(), null);
