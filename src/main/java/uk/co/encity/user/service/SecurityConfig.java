@@ -56,6 +56,7 @@ public class SecurityConfig {
         http
                 .authorizeExchange()
                 .pathMatchers(HttpMethod.PATCH, "/**").permitAll()
+                .pathMatchers(HttpMethod.POST, "/**").permitAll()
                 .pathMatchers(HttpMethod.DELETE, "/**").permitAll()
                 .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .pathMatchers(HttpMethod.GET, "/users/**").permitAll()
@@ -93,6 +94,7 @@ public class SecurityConfig {
         corsConfig.addAllowedMethod(HttpMethod.OPTIONS);
         corsConfig.addAllowedMethod(HttpMethod.PATCH);
         corsConfig.addAllowedMethod(HttpMethod.DELETE);
+        corsConfig.addAllowedMethod(HttpMethod.POST);
         corsConfig.setAllowedOrigins(Arrays.asList(this.allowedOrigins));
 
         UrlBasedCorsConfigurationSource source =

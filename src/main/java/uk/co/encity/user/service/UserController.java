@@ -2,6 +2,7 @@ package uk.co.encity.user.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.rabbitmq.client.RpcClient;
 import org.everit.json.schema.Schema;
 import org.everit.json.schema.ValidationException;
 import org.everit.json.schema.loader.SchemaLoader;
@@ -129,6 +130,17 @@ public class UserController {
         ResponseEntity<String> response = ResponseEntity.status(HttpStatus.OK).build();
         logger.debug("Attempting to PATCH user: " + userId);
 
+        return Mono.just(response);
+    }
+
+    @CrossOrigin
+    @PreAuthorize("permitAll()")
+    @PostMapping(value = "/users")
+    public Mono<ResponseEntity<String>> postUser(
+            @RequestBody String body,
+            UriComponentsBuilder uriBuilder) {
+        logger.debug("Attempting to POST user:" + body);
+        ResponseEntity<String> response = ResponseEntity.status(HttpStatus.OK).build();
         return Mono.just(response);
     }
 

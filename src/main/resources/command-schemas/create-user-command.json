@@ -1,0 +1,28 @@
+{
+  "$schema" : "http://json-schema.org/draft/2019-09/schema#",
+  "$id" :  "http://encity.co.uk/dto-schemas/create-user-command.json",
+  "title": "Generic schema for requests to create a user",
+  "description": "Used to validate incoming request types for user creation",
+
+  "properties": {
+    "domain" : {
+      "type": "string"
+    },
+    "firstname" : {
+      "type": "string"
+    },
+    "lastname" : {
+      "type": "string"
+    },
+    "isAdmin" : {
+      "type": "boolean"
+    },
+    "email" : {
+      "type": "string",
+      "format": "email"
+    },
+    "userId" : {
+      "type": "string"
+    }
+  }
+}
