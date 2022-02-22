@@ -140,7 +140,30 @@ public class UserController {
             @RequestBody String body,
             UriComponentsBuilder uriBuilder) {
         logger.debug("Attempting to POST user:" + body);
-        ResponseEntity<String> response = ResponseEntity.status(HttpStatus.OK).build();
+
+        ResponseEntity<String> response = null;
+
+        final String createUserCommandSchema = "command-schemas/create-user-command.json";
+
+        try {
+            Schema schema = SchemaLoader.load(
+                    new JSONObject(
+                            new JSONTokener(requireNonNull(getClass().getClassLoader().getResourceAsStream(createUserCommandSchema)))
+                    )
+            );
+            JSONObject post = new JSONObject(new JSONTokener(body));
+            schema.validate(post);
+            logger.debug("Incoming post request contains valid request type");
+
+            // As we add more transitions, additional validation will be needed here
+            // We should create specific schemas per transition and also validate against them
+        } catch (ValidationException e) {
+            logger.warn("Incoming request body does NOT validate against post schema; potential API mis-use!");
+            response = ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            return Mono.just(response);
+        }
+
+        response = ResponseEntity.status(HttpStatus.OK).build();
         return Mono.just(response);
     }
 
