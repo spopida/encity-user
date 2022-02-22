@@ -1,5 +1,6 @@
 package uk.co.encity.user.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import org.springframework.amqp.core.AmqpTemplate;
@@ -29,7 +30,7 @@ public abstract class UserService {
      * @param command the command (transition) to perform
      * @return the affected User
      */
-    public User applyCommand(UserCommand command) throws
+    public User applyCommand(PatchUserCommand command) throws
             UnsupportedOperationException,
             IllegalArgumentException,
             PreConditionException,
@@ -53,16 +54,20 @@ public abstract class UserService {
                 userRepo.confirmUser(theUser, ((ConfirmUserCommand)command).getInitialPassword());
                 break;
             case REJECT_USER:
-            case DELETE_USER:
                 // No special action is needed - the event will be saved (below)
                 break;
             default:
                 throw new UnsupportedOperationException("Command not Supported: " + command.getCmdType().toString(), null);
         }
 
+        return this.saveAndPublishUserEvent(theUser, command);
+    }
+
+    public User saveAndPublishUserEvent(User theUser, UserCommand command) throws JsonProcessingException {
         // Save an event
         UserEvent evt = command.createUserEvent(theUser);
-        userRepo.addUserEvent(command.getCommandId(), evt.getUserEventType(), theUser);
+        this.getRepository()
+                .addUserEvent(command.getCommandId(), evt.getUserEventType(), theUser);
 
         // Publish the event
         SimpleModule module = new SimpleModule();

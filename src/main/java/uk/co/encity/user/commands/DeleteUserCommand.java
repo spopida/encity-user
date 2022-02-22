@@ -20,11 +20,11 @@ public class DeleteUserCommand extends UserCommand{
     public void checkPreConditions(User u) throws PreConditionException {
         if (u.getTenantStatus() != UserTenantStatus.CONFIRMED) {
             throw new PreConditionException(
-                    "Cannot delete user " + u.getUserId() + " due to failed pre-condition");
+                    "Cannot delete user " + u.getUserId() + " as it is not confirmed");
         }
         if (u.getProviderStatus() != UserProviderStatus.ACTIVE) {
             throw new PreConditionException(
-                    "Cannot delete user " + u.getUserId() + " due to failed pre-condition");
+                    "Cannot delete user " + u.getUserId() + " as it is not active");
         }
         // If the subject user is and Admin user and is the only one, then it can't be deleted (as this would put
         // the tenancy in a state such that it could not be properly administered and it could not recover from this

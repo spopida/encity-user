@@ -1,6 +1,8 @@
 package uk.co.encity.user.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.rabbitmq.client.RpcClient;
 import org.everit.json.schema.Schema;
@@ -21,10 +23,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 import reactor.util.Logger;
 import reactor.util.Loggers;
-import uk.co.encity.user.commands.DeleteUserCommand;
-import uk.co.encity.user.commands.PatchUserCommand;
-import uk.co.encity.user.commands.PatchUserCommandDeserializer;
-import uk.co.encity.user.commands.PreConditionException;
+import uk.co.encity.user.commands.*;
 import uk.co.encity.user.entity.BasicUser;
 import uk.co.encity.user.entity.User;
 import uk.co.encity.user.entity.UserProviderStatus;
@@ -161,9 +160,22 @@ public class UserController {
             return Mono.just(response);
         }
 
+        // TODO: NEXT STEPS
+        // - Deserialize the body into a CreateUserCommand instance (see other controller methods for an example of how to do this)
+        // - TBH we should create a private helper method that takes a body, and a deserializer, and returns a command.  This would be cool
+        //   because we could re-use it all the public endpoint methods.  Please make it happen!
+        // - Check the pre-conditions of the command (currently a no-op!)
+        // - Write a UserCreatedEvent class
+        // - Modify CreateUserCommand so that it can emit a UserCreatedEvent in its createUserEvent method
+        // - Call the appropriate UserRepository method to create a new user
+        // - call saveAndPublishUserEvent in the userService
+        // - make sure you return the created user in the response
+        // - revisit the checkPreConditions method; check that the user doesn't already exist
+
         response = ResponseEntity.status(HttpStatus.OK).build();
         return Mono.just(response);
     }
+
 
     @CrossOrigin
     @PreAuthorize("permitAll()")
@@ -173,6 +185,7 @@ public class UserController {
             UriComponentsBuilder uriBuilder) {
         ResponseEntity<User> response = ResponseEntity.status(HttpStatus.OK).build();
         logger.debug("Attempting to DELETE user: " + userId);
+
 
         DeleteUserCommand cmd = new DeleteUserCommand(userId, this.userRepo);
 
@@ -184,14 +197,23 @@ public class UserController {
         //-------------------------------------------------------
         User u = null;
         try {
-            u = userService.applyCommand(cmd);
-        } catch (UnsupportedOperationException | IOException e) {
-            logger.error(e.getMessage());
-            response = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            u = userRepo.getUser(userId);
+            cmd.checkPreConditions(u);
+        } catch ( IOException e) {
+            logger.debug(String.format("Attempt to delete non-existent user (userId = %s)", userId));
+            response = ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             return Mono.just(response);
-        } catch (IllegalArgumentException | PreConditionException e) {
+        }  catch (IllegalArgumentException | PreConditionException e) {
             logger.info(e.getMessage());
             response = ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            return Mono.just(response);
+        }
+
+        try {
+            u = userService.saveAndPublishUserEvent(u, cmd);
+        } catch (JsonProcessingException e) {
+            logger.error(e.getMessage());
+            response = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
             return Mono.just(response);
         }
 
@@ -300,6 +322,17 @@ public class UserController {
 
         response = ResponseEntity.status(HttpStatus.OK).body(user);
         return Mono.just(response);
+    }
+
+    /**
+     * A helper method to validate and convert a request body into a sub-type of UserCommand
+     * @param body the incoming request body
+     * @param schemaFileName the JSON schema used to validate the body
+     * @param deserializer an instance of the deserializer needed to deserialize the JSON
+     * @return a sub-type of {@link UserCommand}
+     */
+    private UserCommand convertRequestBody(String body, String schemaFileName,  StdDeserializer<UserCommand> deserializer) {
+        return null;
     }
 
     /**
