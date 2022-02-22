@@ -25,7 +25,8 @@ public abstract class UserCommand {
         CONFIRM_USER,
         REJECT_USER,
         RESET_USER,
-        DELETE_USER
+        DELETE_USER,
+        CREATE_USER
     }
 
     protected static final Map<String, UserTenantCommandType> ACTION_MAP;

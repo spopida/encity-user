@@ -155,8 +155,6 @@ public class UserController {
             schema.validate(post);
             logger.debug("Incoming post request contains valid request type");
 
-            // As we add more transitions, additional validation will be needed here
-            // We should create specific schemas per transition and also validate against them
         } catch (ValidationException e) {
             logger.warn("Incoming request body does NOT validate against post schema; potential API mis-use!");
             response = ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
